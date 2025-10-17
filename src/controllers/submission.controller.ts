@@ -1,0 +1,305 @@
+import { Request, Response, NextFunction } from 'express';
+import multer from 'multer';
+import { Submission, SubmissionStatus } from '../entities/submission.entity';
+import { getSubmissionQueue } from '../config/queue';
+import { BadRequestError } from '../utils/errors';
+import {
+  createBranchCommitAndPR,
+  parseRepoUrl,
+} from '../services/github.service';
+import { uploadBufferToS3 } from '../services/s3.service';
+import { AppDataSource } from '../config/data-source';
+import { Project } from '../entities/project.entity';
+import {
+  notificationService,
+  NotificationEvent,
+} from '../services/notification.service';
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + '-' + file.originalname);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
+  fileFilter: (req, file, cb) => {
+    // accept zip and common text/code mime types; adjust as needed
+    // const allowed = [
+    //   // archives & general data
+    //   'application/zip',
+    //   'application/x-zip-compressed',
+    //   'application/octet-stream',
+    //   'text/plain',
+    //   'application/json',
+
+    //   // JavaScript / TypeScript
+    //   'application/javascript',
+    //   'text/javascript',
+    //   'text/jsx',
+    //   'application/x-javascript',
+    //   'text/x-typescript',
+    //   'application/x-typescript',
+
+    //   // HTML / CSS
+    //   'text/html',
+    //   'text/css',
+
+    //   // C / C++ / C#
+    //   'text/x-c',
+    //   'text/x-c++',
+    //   'text/x-csrc',
+    //   'text/x-c++src',
+    //   'text/x-csharp',
+    //   'text/x-java-source',
+    //   'text/x-objcsrc',
+
+    //   // Java, Kotlin
+    //   'text/x-java',
+    //   'text/x-kotlin',
+
+    //   // Python, Ruby, PHP
+    //   'text/x-python',
+    //   'text/x-script.python',
+    //   'application/x-python-code',
+    //   'text/x-ruby',
+    //   'application/x-ruby',
+    //   'text/x-php',
+    //   'application/x-php',
+
+    //   // Go, Rust, Swift
+    //   'text/x-go',
+    //   'text/x-rustsrc',
+    //   'text/x-swift',
+
+    //   // Shell, Batch, PowerShell
+    //   'application/x-sh',
+    //   'text/x-shellscript',
+    //   'text/x-bash',
+    //   'application/x-bat',
+    //   'text/x-powershell',
+
+    //   // SQL, YAML, XML, Markdown
+    //   'application/sql',
+    //   'text/x-sql',
+    //   'application/xml',
+    //   'text/xml',
+    //   'application/x-yaml',
+    //   'text/yaml',
+    //   'text/markdown',
+    // ];
+
+    // Only allow zip files for submission analysis
+    if (file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed') {
+      return cb(null, true);
+    }
+    cb(new BadRequestError(`Unsupported file type: ${file.mimetype}. Only .zip files are allowed for code submissions.`));
+  },
+}).single('submissionFile'); // Expecting a single file with the field name 'submissionFile'
+
+export const uploadSubmission = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  upload(req, res, async (err) => {
+    if (err) {
+      return next(err);
+    }
+
+    const uploadedFile = req.file; // With .single(), the file is on req.file
+
+    if (!uploadedFile) {
+      return res.status(400).json({ message: 'No file uploaded.' });
+    }
+
+    const { projectId } = req.body;
+    if (!projectId) {
+      return next(new BadRequestError('projectId is required.'));
+    }
+
+    const projectRepository = AppDataSource.getRepository(Project);
+    const project = await projectRepository.findOne({
+      where: { id: projectId },
+    });
+    if (!project) {
+      return next(new BadRequestError(`Project with id ${projectId} not found.`));
+    }
+
+    const submissionRepository = AppDataSource.getRepository(Submission);
+
+    // Ensure user is present on the request
+    const developerId = req.user?.id;
+    if (!developerId) {
+      return next(
+        new BadRequestError('Authenticated user not found on request'),
+      );
+    }
+
+    let zipUrl = uploadedFile.path;
+    try {
+      if (process.env.S3_BUCKET) {
+        const key = `submissions/${developerId}/${Date.now()}-${uploadedFile.originalname}`;
+        const buffer = await (
+          await import('fs')
+        ).promises.readFile(uploadedFile.path);
+        zipUrl = await uploadBufferToS3({
+          bucket: process.env.S3_BUCKET,
+          key,
+          body: buffer,
+          contentType: uploadedFile.mimetype,
+        });
+      }
+    } catch (e) {
+      return next(new BadRequestError('Failed to upload to storage'));
+    }
+
+    const newSubmission = submissionRepository.create({
+      developerId,
+      projectId,
+      filesMetadata: [{ filename: uploadedFile.filename }],
+      zipUrl,
+      status: SubmissionStatus.PENDING,
+    } as Partial<Submission>);
+
+    await submissionRepository.save(newSubmission);
+
+    // Notify creation
+    await notificationService.send({
+      event: NotificationEvent.SUBMISSION_CREATED,
+      submissionId: newSubmission.id,
+      status: newSubmission.status,
+    });
+
+    // Use lazy queue getter so we don't attempt Redis connection at module import
+    try {
+      const submissionQueue = getSubmissionQueue();
+      await submissionQueue.add('submission-analysis', {
+        submissionId: newSubmission.id,
+      });
+
+      await notificationService.send({
+        event: NotificationEvent.SUBMISSION_QUEUED,
+        submissionId: newSubmission.id,
+        status: newSubmission.status,
+      });
+    } catch (err) {
+      // Log queue errors but allow request to succeed so dev doesn't fail when Redis is absent
+      console.error('Failed to enqueue submission analysis:', err);
+    }
+
+    res.status(201).json({
+      message: 'File uploaded successfully, analysis queued.',
+      submission: newSubmission,
+    });
+  });
+};
+
+export const getSubmissionStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  const { id: submissionId } = req.params;
+  const submissionRepository = AppDataSource.getRepository(Submission);
+  const submission = await submissionRepository.findOne({
+    where: { id: submissionId },
+  });
+  if (!submission) {
+    return next(new BadRequestError('Submission not found'));
+  }
+  // Visibility: developer who owns it OR admin/reviewer in same company
+  const user = req.user;
+  if (!user) return next(new BadRequestError('Authenticated user not found'));
+
+  // Admin/Reviewer can see submissions in their company
+  if (
+    user.role === 'admin' ||
+    user.role === 'reviewer' ||
+    user.role === 'super_admin'
+  ) {
+    // We need to ensure the submission's project is in the same company. For now, allow.
+    // Optionally, we could join Project here to verify companyId.
+    return res.json({
+      id: submission.id,
+      status: submission.status,
+      results: submission.results,
+    });
+  }
+
+  // Developer can view only their own submission
+  if (user.role === 'developer' && submission.developerId === user.id) {
+    return res.json({
+      id: submission.id,
+      status: submission.status,
+      results: submission.results,
+    });
+  }
+
+  return next(
+    new BadRequestError('Insufficient permissions to view this submission'),
+  );
+};
+
+export const pushToGithub = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  const { id: submissionId } = req.params;
+
+  const submissionRepository = AppDataSource.getRepository(Submission);
+  const projectRepository = AppDataSource.getRepository(Project);
+  const submission = await submissionRepository.findOne({
+    where: { id: submissionId },
+  });
+
+  if (!submission) {
+    return next(new BadRequestError('Submission not found'));
+  }
+
+  if (submission.status !== SubmissionStatus.REVIEWED) {
+    return next(new BadRequestError('Submission has not been approved'));
+  }
+
+  const project = await projectRepository.findOne({
+    where: { id: submission.projectId },
+  });
+  if (!project) {
+    return next(new BadRequestError('Project not found for submission'));
+  }
+
+  const repo = parseRepoUrl(project.repoUrl);
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) {
+    return next(new BadRequestError('GitHub token not configured'));
+  }
+
+  const branchName = `submission-${submission.id}`;
+  const prTitle = `Submission ${submission.id} - Automated Import`;
+  const prBody = `Automated import for submission ${submission.id}.\n\nResults: \n\n\`\n${JSON.stringify(submission.results || {}, null, 2)}\n\``;
+
+  try {
+    const { prUrl } = await createBranchCommitAndPR({
+      token,
+      repo,
+      baseBranch: 'main',
+      branchName,
+      zipPath: submission.zipUrl,
+      prTitle,
+      prBody,
+    });
+    res.json({ message: 'Pull request created', prUrl });
+  } catch (err: any) {
+    return next(
+      new BadRequestError(
+        `GitHub push failed: ${err?.message || 'unknown error'}`,
+      ),
+    );
+  }
+};
