@@ -209,6 +209,7 @@ export const getSubmissionStatus = async (
   const submissionRepository = AppDataSource.getRepository(Submission);
   const submission = await submissionRepository.findOne({
     where: { id: submissionId },
+    relations: ['project'], // Add this line to include the project relation
   });
   if (!submission) {
     return next(new BadRequestError('Submission not found'));
@@ -225,20 +226,12 @@ export const getSubmissionStatus = async (
   ) {
     // We need to ensure the submission's project is in the same company. For now, allow.
     // Optionally, we could join Project here to verify companyId.
-    return res.json({
-      id: submission.id,
-      status: submission.status,
-      results: submission.results,
-    });
+    return res.json(submission);
   }
 
   // Developer can view only their own submission
   if (user.role === 'developer' && submission.developerId === user.id) {
-    return res.json({
-      id: submission.id,
-      status: submission.status,
-      results: submission.results,
-    });
+    return res.json(submission);
   }
 
   return next(
@@ -302,4 +295,38 @@ export const pushToGithub = async (
       ),
     );
   }
+};
+
+export const getSubmissions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  if (!req.user) {
+    return next(new BadRequestError('Authenticated user not found'));
+  }
+
+  const developerId = req.user.id;
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = 10;
+  const skip = (page - 1) * limit;
+
+  const submissionRepository = AppDataSource.getRepository(Submission);
+
+  const [submissions, total] = await submissionRepository.findAndCount({
+    where: { developerId },
+    relations: ['project'], // Include project details with each submission
+    order: { createdAt: 'DESC' },
+    take: limit,
+    skip,
+  });
+
+  res.json({
+    data: submissions,
+    meta: {
+      total,
+      page,
+      last_page: Math.ceil(total / limit),
+    },
+  });
 };

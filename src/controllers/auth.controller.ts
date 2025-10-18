@@ -73,5 +73,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
   const token = signToken(user);
 
-  res.json({ token });
+  const { passwordHash, ...userToSend } = user;
+
+  res.json({ token, user: userToSend });
 };

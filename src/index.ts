@@ -4,6 +4,7 @@ import * as dotenv from 'dotenv';
 import { AppDataSource } from './config/data-source';
 import authRoutes from './routes/auth.routes';
 import { AppError } from './utils/errors';
+import cors from 'cors';
 
 dotenv.config();
 
@@ -19,6 +20,14 @@ const limiter = rateLimit({
 
 import bodyParser from 'body-parser';
 
+// --- CORS Configuration ---
+// Allow requests from your React frontend development server
+const corsOptions = {
+  origin: 'http://localhost:5173',
+  optionsSuccessStatus: 200, // For legacy browser support
+};
+app.use(cors(corsOptions));
+
 app.use(limiter);
 // Parse JSON bodies
 app.use(express.json());
@@ -31,6 +40,9 @@ import adminRoutes from './routes/admin.routes';
 import companyRoutes from './routes/company.routes';
 import userRoutes from './routes/user.routes';
 import superadminRoutes from './routes/superadmin.routes';
+import projectRoutes from './routes/project.routes';
+
+
 
 
 app.use('/api/auth', authRoutes);
@@ -40,6 +52,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/superadmin', superadminRoutes);
+app.use('/api/projects', projectRoutes);
 
 app.get('/', (req, res) => {
   res.send('Hello, World!');

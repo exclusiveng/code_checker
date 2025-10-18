@@ -32,3 +32,31 @@ export const createProject = async (req: Request, res: Response, next: NextFunct
 
   res.status(201).json(project);
 };
+
+export const getProjects = async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user) return next(new BadRequestError('Authenticated user not found'));
+
+  const companyId = req.user.companyId;
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = 10;
+  const skip = (page - 1) * limit;
+
+  const projectRepository = AppDataSource.getRepository(Project);
+
+  const [projects, total] = await projectRepository.findAndCount({
+    where: { companyId },
+    relations: ['rulesets'],
+    order: { createdAt: 'DESC' },
+    take: limit,
+    skip,
+  });
+
+  res.json({
+    data: projects,
+    meta: {
+      total,
+      page,
+      last_page: Math.ceil(total / limit),
+    },
+  });
+};

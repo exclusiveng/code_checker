@@ -7,17 +7,17 @@ let PRIVATE_KEY = loadPrivateKey();
 let PUBLIC_KEYS = loadPublicKeys();
 
 // If no private key is configured, generate an ephemeral RSA keypair for development.
-if (!PRIVATE_KEY) {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('No JWT private key configured in production environment');
-  } else {
-    console.warn('No JWT private key configured — generating ephemeral keypair for development');
-    const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'pkcs1', format: 'pem' }, privateKeyEncoding: { type: 'pkcs1', format: 'pem' } });
-    PRIVATE_KEY = privateKey as unknown as string;
-    // prepend generated public key to PUBLIC_KEYS for verification
-    PUBLIC_KEYS = [publicKey as unknown as string, ...PUBLIC_KEYS];
-  }
-}
+// if (!PRIVATE_KEY) {
+//   if (process.env.NODE_ENV === 'production') {
+//     console.error('No JWT private key configured in production environment');
+//   } else {
+//     console.warn('No JWT private key configured — generating ephemeral keypair for development');
+//     const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'pkcs1', format: 'pem' }, privateKeyEncoding: { type: 'pkcs1', format: 'pem' } });
+//     PRIVATE_KEY = privateKey as unknown as string;
+//     // prepend generated public key to PUBLIC_KEYS for verification
+//     PUBLIC_KEYS = [publicKey as unknown as string, ...PUBLIC_KEYS];
+//   }
+// }
 
 
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1d';

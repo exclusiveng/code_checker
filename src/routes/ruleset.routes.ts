@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { createRuleset, getRulesets, getRuleset, updateRuleset, deleteRuleset } from '../controllers/ruleset.controller';
-import { authMiddleware, roleMiddleware } from '../middleware/auth.middleware';
+import { protect, roleMiddleware } from '../middleware/auth.middleware';
 import { UserRole } from '../entities/user.entity';
 
 const router = Router();
 
-router.use(authMiddleware);
+router.use(protect);
 
 router.post('/', roleMiddleware([UserRole.SUPER_ADMIN]), createRuleset);
 router.get('/', roleMiddleware([UserRole.SUPER_ADMIN, UserRole.ADMIN]), getRulesets);
