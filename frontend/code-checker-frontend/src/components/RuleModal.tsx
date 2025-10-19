@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+import { X, FileJson, FileText } from 'lucide-react';
 import { RuleInput } from './RulesetEditor';
 
 interface RuleModalProps {
@@ -8,17 +8,25 @@ interface RuleModalProps {
   onClose: () => void;
   onSave: (rule: RuleInput) => void;
   rule: RuleInput | null;
+  defaultRule: RuleInput;
 }
 
-export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, rule }) => {
+export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, rule, defaultRule }) => {
   const [currentRule, setCurrentRule] = useState<RuleInput | null>(null);
+  const isNewRule = !rule;
 
   useEffect(() => {
-    // When the modal opens, initialize its state with the passed rule
-    if (rule) {
-      setCurrentRule({ ...rule });
+    if (isOpen) {
+      // When the modal opens, initialize its state.
+      // If we are editing, use the passed rule.
+      // If we are adding, use the default rule.
+      if (isNewRule) {
+        setCurrentRule({ ...defaultRule });
+      } else {
+        setCurrentRule({ ...rule });
+      }
     }
-  }, [rule]);
+  }, [isOpen, rule, isNewRule, defaultRule]);
 
   const handleChange = (field: keyof Omit<RuleInput, 'id'>, value: string) => {
     if (currentRule) {
@@ -28,7 +36,9 @@ export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, r
 
   const handleSave = () => {
     if (currentRule) {
-      onSave(currentRule);
+      // If it's a new rule, generate a UUID upon saving.
+      const ruleToSave = isNewRule ? { ...currentRule, id: crypto.randomUUID() } : currentRule;
+      onSave(ruleToSave);
     }
   };
 
@@ -53,7 +63,7 @@ export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, r
           >
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold text-gray-800">
-                {currentRule?.id ? 'Edit Rule' : 'Add New Rule'}
+                {isNewRule ? 'Add New Rule' : 'Edit Rule'}
               </h3>
               <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
                 <X size={20} />
@@ -65,14 +75,14 @@ export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, r
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Type</label>
-                    <select
-                      value={currentRule.type}
-                      onChange={(e) => handleChange('type', e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg p-2 text-sm"
-                    >
-                      <option value="filename-contains">Filename Contains</option>
-                      <option value="file-content-contains">File Content Contains</option>
-                    </select>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleChange('type', 'filename-contains')} className={`flex-1 flex items-center justify-center gap-2 p-2 border rounded-lg text-sm transition-all ${currentRule.type === 'filename-contains' ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-gray-50 hover:bg-gray-100'}`}>
+                        <FileJson size={14} /> Filename
+                      </button>
+                      <button onClick={() => handleChange('type', 'file-content-contains')} className={`flex-1 flex items-center justify-center gap-2 p-2 border rounded-lg text-sm transition-all ${currentRule.type === 'file-content-contains' ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-gray-50 hover:bg-gray-100'}`}>
+                        <FileText size={14} /> Content
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Severity</label>

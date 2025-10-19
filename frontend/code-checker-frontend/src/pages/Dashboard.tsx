@@ -1,18 +1,16 @@
 import { useState, useEffect } from 'react';
 import {UploadForm} from '../components/UploadForm';
 import { SubmissionList } from '../components/SubmissionList';
-import { RulesetEditor } from '../components/RulesetEditor';
 import { ProjectList } from '../components/ProjectList'; // Import the new component
 import { useAuth } from '../hooks/useAuth';
 import { LogOut, User, Calendar, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Ruleset, RulesetList } from '../components/RulesetList';
+import { RulesetManager } from '../components/RulesetManager';
 
 export default function Dashboard() {
   const { user, logout, isAuthenticated, isVerifying, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'projects' | 'submissions' | 'upload' | 'rulesets'>('projects');
-  const [selectedRuleset, setSelectedRuleset] = useState<Ruleset | null>(null);
   const navigate = useNavigate();
 
   // Only redirect after verification finishes
@@ -148,20 +146,7 @@ export default function Dashboard() {
                 }}
               />
             )}
-            {activeTab === 'rulesets' && (
-              <>
-                {selectedRuleset ? (
-                  <RulesetEditor
-                    rulesetId={selectedRuleset.id}
-                    rulesetName={selectedRuleset.name}
-                    onSaveSuccess={() => setSelectedRuleset(null)}
-                    onCancel={() => setSelectedRuleset(null)}
-                  />
-                ) : (
-                  <RulesetList onSelectRuleset={setSelectedRuleset} />
-                )}
-              </>
-            )}
+            {activeTab === 'rulesets' && <RulesetManager />}
           </motion.div>
         </div>
       </main>

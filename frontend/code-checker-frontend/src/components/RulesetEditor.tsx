@@ -29,6 +29,7 @@ const defaultRule: RuleInput = {
 
 export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, rulesetName, onSaveSuccess, onCancel }) => {
   const [rules, setRules] = useState<RuleInput[]>([]);
+  const [name, setName] = useState(rulesetName);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,15 +38,16 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
 
   // Ensure all rules have a unique ID for React keys when the component loads.
   useEffect(() => {
+    setName(rulesetName);
     const fetchRules = async () => {
       setLoading(true);
       setError(null);
       try {
         const response = await api.get(`/rulesets/${rulesetId}`);
         setRules(
-          (response.data.rules || []).map((rule: Omit<RuleInput, 'id'>) => ({
+          (response.data.rules || []).map((rule: Omit<RuleInput, 'id'>, index: number) => ({
             ...rule,
-            id: crypto.randomUUID(),
+            id: `${rulesetId}-${index}-${rule.payload}`, // Create a stable ID
           }))
         );
       } catch (err) {
@@ -56,10 +58,11 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
       }
     };
     fetchRules();
-  }, [rulesetId]);
+  }, [rulesetId, rulesetName]);
 
   const handleAddRule = () => {
-    setEditingRule({ ...defaultRule, id: crypto.randomUUID() });
+    // Set to null to signify a new rule, letting the modal handle defaults.
+    setEditingRule(null);
     setIsModalOpen(true);
   };
 
@@ -73,7 +76,10 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
   };
 
   const handleSaveRule = (ruleToSave: RuleInput) => {
-    const isExisting = rules.some((r) => r.id === ruleToSave.id);
+    // A rule is existing if its ID is already in our rules list.
+    // A new rule from the modal will have a new UUID not present in the list.
+    const isExisting = ruleToSave.id ? rules.some((r) => r.id === ruleToSave.id) : false;
+
     if (isExisting) {
       setRules(rules.map((r) => (r.id === ruleToSave.id ? ruleToSave : r)));
     } else {
@@ -89,7 +95,7 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
     try {
       const rulesToSave = rules.map(({ id, ...rest }) => rest);
       await api.put(`/rulesets/${rulesetId}`, {
-        name: rulesetName,
+        name: name,
         rules: rulesToSave,
       });
       onSaveSuccess();
@@ -107,9 +113,17 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
   return (
     <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-md p-6 border border-gray-200">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-gray-800">
-          Editing: <span className="text-blue-600">{rulesetName}</span>
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-semibold text-gray-800">
+            Editing:
+          </h2>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="text-xl font-semibold text-blue-600 bg-transparent border-b-2 border-transparent focus:border-blue-500 focus:outline-none"
+          />
+        </div>
         <button
           onClick={handleAddRule}
           className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-all"
@@ -188,6 +202,7 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveRule}
         rule={editingRule}
+        defaultRule={defaultRule}
       />
     </div>
   );

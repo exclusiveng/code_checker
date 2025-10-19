@@ -42,7 +42,6 @@ export const getRulesets = async (req: Request, res: Response, next: NextFunctio
 
   const rulesets = await rulesetRepository.find({
     where: { companyId },
-    relations: ['rules'],
   });
   res.json(rulesets);
 };
