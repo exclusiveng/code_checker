@@ -13,11 +13,18 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
 
   const { name, email, password, companyName } = req.body;
 
-  if (!name || !email || !password || !companyName) {
+  if (!name || !email || !password) {
     return next(new BadRequestError('Missing required fields'));
   }
 
   const userRepository = AppDataSource.getRepository(User);
+  const userCount = await userRepository.count();
+  const isFirstUser = userCount === 0;
+
+  // companyName is required so we can associate the new user with a company.
+  if (!companyName) {
+    return next(new BadRequestError('Missing required fields'));
+  }
   const existingUser = await userRepository.findOne({ where: { email } });
 
   if (existingUser) {
@@ -32,19 +39,29 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     await companyRepository.save(company);
   }
 
+  // If this is the first user for this company, promote them to SUPER_ADMIN
+  const companyUserCount = await userRepository.count({ where: { companyId: company.id } });
+  const isFirstForCompany = companyUserCount === 0;
+
   const passwordHash = await bcrypt.hash(password, 10);
+
+  const role = isFirstForCompany ? UserRole.SUPER_ADMIN : UserRole.DEVELOPER;
 
   const newUser = userRepository.create({
     name,
     email,
     passwordHash,
     companyId: company.id,
-    role: UserRole.DEVELOPER,
+    role,
   });
 
-  await userRepository.save(newUser);
+  const saved = await userRepository.save(newUser);
 
-  res.status(201).json({ message: 'User created successfully' });
+  // Sign a token so the frontend can auto-login after registering the first admin
+  const token = signToken(saved);
+  const { passwordHash: _ph, ...userToSend } = saved as any;
+
+  res.status(201).json({ token, user: userToSend });
 };
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
