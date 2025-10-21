@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-  "build": "node --max-old-space-size=1024 ./node_modules/typescript/bin/tsc --incremental",
-  "start": "node dist/index.js",
+    "build": "tsc",
+    "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "worker": "ts-node src/worker.ts",
     "lint": "eslint . --ext .ts",

@@ -19,6 +19,9 @@ const limiter = rateLimit({
 });
 
 import bodyParser from 'body-parser';
+import fs from 'fs';
+import path from 'path';
+import { spawn, fork } from 'child_process';
 
 // --- CORS Configuration ---
 // Allow requests from your React frontend development server
@@ -71,6 +74,28 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
+
+  const startWorker = process.env.START_WORKER_WITH_SERVER === '1' || process.env.RUN_WORKER === '1';
+  if (startWorker) {
+    try {
+      const distWorker = path.join(__dirname, 'worker.js');
+      const srcWorker = path.join(__dirname, '..', 'src', 'worker.ts');
+
+      if (fs.existsSync(distWorker)) {
+        // Fork the compiled worker (production)
+        const child = fork(distWorker, [], { stdio: 'inherit' });
+        child.on('exit', (code) => console.log(`Worker process exited with code ${code}`));
+      } else if (fs.existsSync(srcWorker)) {
+        // Spawn node with ts-node/register to run the TypeScript worker in dev
+        const child = spawn(process.execPath, ['-r', 'ts-node/register', srcWorker], { stdio: 'inherit' });
+        child.on('exit', (code) => console.log(`Worker (ts) process exited with code ${code}`));
+      } else {
+        console.warn('Worker entry not found (dist/worker.js or src/worker.ts). Worker not started.');
+      }
+    } catch (err) {
+      console.error('Failed to start worker process with server:', err);
+    }
+  }
 });
 
 
