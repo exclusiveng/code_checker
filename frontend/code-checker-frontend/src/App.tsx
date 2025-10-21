@@ -4,7 +4,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import SubmissionDetail from './pages/Submissiondetail';
 import {UploadForm} from './components/UploadForm';
-import {RulesetEditor} from './components/RulesetEditor';
+import {RulesetManager} from './components/RulesetManager';
 import {SubmissionList} from './components/SubmissionList';
 import { motion } from 'framer-motion';
 
@@ -69,7 +69,7 @@ export default function App() {
           path="/rulesets"
           element={
             <ProtectedRoute>
-              <RulesetEditor />
+              <RulesetManager />
             </ProtectedRoute>
           }
         />

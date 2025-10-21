@@ -3,14 +3,12 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-// Create a transporter object using SMTP transport
-// For Gmail, you must use an "App Password" if you have 2-Step Verification enabled.
-// See: https://support.google.com/accounts/answer/185833
+
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.SMTP_USER, // Your Gmail address, e.g., 'you@gmail.com'
-    pass: process.env.SMTP_PASS, // Your Gmail App Password
+    user: process.env.SMTP_USER, 
+    pass: process.env.SMTP_PASS, 
   },
 });
 

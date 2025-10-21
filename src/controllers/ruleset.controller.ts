@@ -8,6 +8,11 @@ import { validateRulesArray } from '../utils/validator';
 export const createRuleset = async (req: Request, res: Response, next: NextFunction) => {
   const { name, description, rules, projectId } = req.body;
 
+  // Helpful debug logging for payload issues
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug('createRuleset payload rules:', JSON.stringify(rules));
+  }
+
   if (!name || !rules) {
     return next(new BadRequestError('Missing required fields'));
   }
@@ -29,10 +34,13 @@ export const createRuleset = async (req: Request, res: Response, next: NextFunct
     companyId,
     projectId
   });
-
-  await rulesetRepository.save(newRuleset);
-
-  res.status(201).json(newRuleset);
+  try {
+    await rulesetRepository.save(newRuleset);
+    res.status(201).json(newRuleset);
+  } catch (err: any) {
+    console.error('Failed to save new ruleset:', err?.message || err);
+    return next(new BadRequestError('Failed to save ruleset: ' + (err?.message || 'unknown error')));
+  }
 };
 
 export const getRulesets = async (req: Request, res: Response, next: NextFunction) => {
@@ -76,6 +84,10 @@ export const updateRuleset = async (req: Request, res: Response, next: NextFunct
 
   const { name, description, rules } = req.body;
 
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug('updateRuleset payload rules:', JSON.stringify(rules));
+  }
+
   if (rules) {
     const validation = validateRulesArray(rules);
     if (!validation.valid) {
@@ -87,7 +99,12 @@ export const updateRuleset = async (req: Request, res: Response, next: NextFunct
 
   // Merge other properties
   rulesetRepository.merge(ruleset, { name, description });
-  await rulesetRepository.save(ruleset);
+  try {
+    await rulesetRepository.save(ruleset);
+  } catch (err: any) {
+    console.error('Failed to update ruleset:', err?.message || err);
+    return next(new BadRequestError('Failed to update ruleset: ' + (err?.message || 'unknown error')));
+  }
 
   res.json(await rulesetRepository.findOne({ where: { id: ruleset.id }, relations: ['rules'] }));
 };

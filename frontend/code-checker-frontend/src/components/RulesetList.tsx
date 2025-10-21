@@ -45,7 +45,7 @@ export const RulesetList: React.FC<RulesetListProps> = ({ onSelectRuleset, onDel
   }, [user?.companyId]);
 
   const openDeleteConfirmation = (e: React.MouseEvent, ruleset: Ruleset) => {
-    e.stopPropagation(); // Prevent onSelectRuleset from firing
+    e.stopPropagation(); 
     setRulesetToDelete(ruleset);
     setIsModalOpen(true);
   };

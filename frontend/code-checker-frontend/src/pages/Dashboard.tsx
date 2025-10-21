@@ -1,19 +1,19 @@
 import { useState, useEffect } from 'react';
 import {UploadForm} from '../components/UploadForm';
 import { SubmissionList } from '../components/SubmissionList';
-import { ProjectList } from '../components/ProjectList'; // Import the new component
+import { ProjectList } from '../components/ProjectList'; 
 import { useAuth } from '../hooks/useAuth';
 import { LogOut, User, Calendar, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { RulesetManager } from '../components/RulesetManager';
+import { UserManagement } from '../components/UserManagement';
 
 export default function Dashboard() {
   const { user, logout, isAuthenticated, isVerifying, isLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'projects' | 'submissions' | 'upload' | 'rulesets'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'submissions' | 'upload' | 'rulesets' | 'users'>('projects');
   const navigate = useNavigate();
 
-  // Only redirect after verification finishes
   useEffect(() => {
     if (!isVerifying && !isLoading && !isAuthenticated) {
       console.warn('[Dashboard] No valid session found, redirecting to login.');
@@ -21,7 +21,6 @@ export default function Dashboard() {
     }
   }, [isAuthenticated, isVerifying, isLoading, navigate]);
 
-  // While auth is verifying or loading user data
   if (isLoading || isVerifying) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-600">
@@ -30,7 +29,6 @@ export default function Dashboard() {
     );
   }
 
-  // If the user isn’t authenticated, stop rendering UI
   if (!isAuthenticated || !user) {
     return null;
   }
@@ -128,6 +126,16 @@ export default function Dashboard() {
             >
               Rule Sets
             </button>
+            {user?.role === 'super_admin' && (
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
+                  activeTab === 'users' ? 'bg-white text-blue-600 shadow' : 'text-gray-600 hover:bg-white/50'
+                }`}
+              >
+                Users
+              </button>
+            )}
           </nav>
 
           {/* Tab Content */}
@@ -147,13 +155,14 @@ export default function Dashboard() {
               />
             )}
             {activeTab === 'rulesets' && <RulesetManager />}
+            {activeTab === 'users' && user?.role === 'super_admin' && <UserManagement />}
           </motion.div>
         </div>
       </main>
 
       {/* Footer */}
       <footer className="text-center py-4 border-t bg-white text-sm text-gray-600">
-        © {new Date().getFullYear()} Code Checker Platform. Built with ❤️ and TypeScript.
+        © {new Date().getFullYear()} Code Checker Platform.
       </footer>
     </div>
   );

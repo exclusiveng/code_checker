@@ -1,11 +1,25 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/api';
+// Allow runtime override for the API base URL. This helps when the backend URL
+// is known only at runtime (e.g., different dev ports or proxied hosts).
+const envBase = import.meta.env.VITE_API_BASE;
+const runtimeOverride = (window as any).__API_BASE || localStorage.getItem('API_BASE');
+const API_BASE = runtimeOverride || envBase || 'http://localhost:3000/api';
 
 export const api = axios.create({
   baseURL: API_BASE,
   timeout: 20000,
 });
+
+// Small helper to update the base at runtime if needed
+export function setApiBase(url: string) {
+  api.defaults.baseURL = url;
+  try {
+    localStorage.setItem('API_BASE', url);
+  } catch (e) {
+    // ignore storage errors
+  }
+}
 
 // Attach auth token dynamically
 api.interceptors.request.use((config) => {

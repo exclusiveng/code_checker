@@ -7,15 +7,15 @@ interface User {
   role: string;
   companyId?: string;
   name?: string;
-  createdAt?: string; // Add createdAt to the User type
+  createdAt?: string; 
 }
 
 interface AuthContextType {
   user: User | null;
-  token: string | null; // Add token to the context
+  token: string | null; 
   isAuthenticated: boolean;
   isVerifying: boolean;
-  isLoading: boolean; // Add isLoading for consistency
+  isLoading: boolean; 
   login: (token: string) => Promise<void>;
   logout: () => void;
 }
@@ -42,11 +42,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setToken(storedToken);
         localStorage.setItem('authToken', storedToken);
       } else {
-        console.warn('[Auth] Verification failed response:', res.data);
         logout();
       }
     } catch (err) {
-      console.warn('[Auth] Verification failed after login.', err);
       logout();
     } finally {
       setIsVerifying(false);
@@ -55,7 +53,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const login = useCallback(
     async (token: string) => {
-      console.log('[Auth] Logging in with token');
       localStorage.setItem('authToken', token);
       setToken(token);
       await verifySession(token);
@@ -64,7 +61,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 
   const logout = useCallback(() => {
-    console.log('[Auth] Clearing session.');
     localStorage.removeItem('authToken');
     setUser(null);
     setToken(null);
@@ -76,7 +72,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (storedToken) {
       verifySession(storedToken);
     } else {
-      console.log('[Auth] No stored token found.');
       setIsVerifying(false);
     }
   }, [verifySession]);
@@ -88,7 +83,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isAuthenticated,
         token,
         isVerifying,
-        isLoading: isVerifying, // Map isVerifying to isLoading
+        isLoading: isVerifying,
         login,
         logout,
       }}

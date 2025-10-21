@@ -19,8 +19,9 @@ export function validateRulesArray(input: unknown): {
       return errors.push(`rule at index ${idx} must be an object`);
     if (!r.type || typeof r.type !== 'string')
       errors.push(`rule[${idx}].type is required and must be a string`);
-    if (typeof r.payload === 'undefined')
-      errors.push(`rule[${idx}].payload is required`);
+    // payload must be present and not an empty string/null
+    if (typeof r.payload === 'undefined' || r.payload === null || (typeof r.payload === 'string' && r.payload.trim() === ''))
+      errors.push(`rule[${idx}].payload is required and must not be empty`);
     if (!r.severity || typeof r.severity !== 'string')
       errors.push(`rule[${idx}].severity is required and must be a string`);
     if (!r.message || typeof r.message !== 'string')

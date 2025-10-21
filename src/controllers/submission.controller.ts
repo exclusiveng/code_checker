@@ -28,79 +28,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
-  fileFilter: (req, file, cb) => {
-    // accept zip and common text/code mime types; adjust as needed
-    // const allowed = [
-    //   // archives & general data
-    //   'application/zip',
-    //   'application/x-zip-compressed',
-    //   'application/octet-stream',
-    //   'text/plain',
-    //   'application/json',
-
-    //   // JavaScript / TypeScript
-    //   'application/javascript',
-    //   'text/javascript',
-    //   'text/jsx',
-    //   'application/x-javascript',
-    //   'text/x-typescript',
-    //   'application/x-typescript',
-
-    //   // HTML / CSS
-    //   'text/html',
-    //   'text/css',
-
-    //   // C / C++ / C#
-    //   'text/x-c',
-    //   'text/x-c++',
-    //   'text/x-csrc',
-    //   'text/x-c++src',
-    //   'text/x-csharp',
-    //   'text/x-java-source',
-    //   'text/x-objcsrc',
-
-    //   // Java, Kotlin
-    //   'text/x-java',
-    //   'text/x-kotlin',
-
-    //   // Python, Ruby, PHP
-    //   'text/x-python',
-    //   'text/x-script.python',
-    //   'application/x-python-code',
-    //   'text/x-ruby',
-    //   'application/x-ruby',
-    //   'text/x-php',
-    //   'application/x-php',
-
-    //   // Go, Rust, Swift
-    //   'text/x-go',
-    //   'text/x-rustsrc',
-    //   'text/x-swift',
-
-    //   // Shell, Batch, PowerShell
-    //   'application/x-sh',
-    //   'text/x-shellscript',
-    //   'text/x-bash',
-    //   'application/x-bat',
-    //   'text/x-powershell',
-
-    //   // SQL, YAML, XML, Markdown
-    //   'application/sql',
-    //   'text/x-sql',
-    //   'application/xml',
-    //   'text/xml',
-    //   'application/x-yaml',
-    //   'text/yaml',
-    //   'text/markdown',
-    // ];
-
-    // Only allow zip files for submission analysis
-    if (file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed') {
-      return cb(null, true);
-    }
-    cb(new BadRequestError(`Unsupported file type: ${file.mimetype}. Only .zip files are allowed for code submissions.`));
-  },
-}).single('submissionFile'); // Expecting a single file with the field name 'submissionFile'
+}).any(); 
 
 export const uploadSubmission = (
   req: Request,
@@ -112,7 +40,10 @@ export const uploadSubmission = (
       return next(err);
     }
 
-    const uploadedFile = req.file; // With .single(), the file is on req.file
+    const anyReq: any = req as any;
+    const uploadedFile = Array.isArray(anyReq.files)
+      ? anyReq.files[0]
+      : anyReq.file; // fallback to single-file handlers
 
     if (!uploadedFile) {
       return res.status(400).json({ message: 'No file uploaded.' });
@@ -209,23 +140,22 @@ export const getSubmissionStatus = async (
   const submissionRepository = AppDataSource.getRepository(Submission);
   const submission = await submissionRepository.findOne({
     where: { id: submissionId },
-    relations: ['project'], // Add this line to include the project relation
+    relations: ['project'], 
   });
   if (!submission) {
     return next(new BadRequestError('Submission not found'));
   }
-  // Visibility: developer who owns it OR admin/reviewer in same company
+
   const user = req.user;
   if (!user) return next(new BadRequestError('Authenticated user not found'));
 
-  // Admin/Reviewer can see submissions in their company
+
   if (
     user.role === 'admin' ||
     user.role === 'reviewer' ||
     user.role === 'super_admin'
   ) {
-    // We need to ensure the submission's project is in the same company. For now, allow.
-    // Optionally, we could join Project here to verify companyId.
+    
     return res.json(submission);
   }
 
@@ -315,7 +245,7 @@ export const getSubmissions = async (
 
   const [submissions, total] = await submissionRepository.findAndCount({
     where: { developerId },
-    relations: ['project'], // Include project details with each submission
+    relations: ['project'], 
     order: { createdAt: 'DESC' },
     take: limit,
     skip,

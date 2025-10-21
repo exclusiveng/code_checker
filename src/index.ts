@@ -28,7 +28,7 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-app.use(limiter);
+// app.use(limiter);
 // Parse JSON bodies
 app.use(express.json());
 // Parse urlencoded bodies (form submissions)
@@ -68,12 +68,12 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   res.status(500).json({ message: 'Internal Server Error' });
 });
 
-// Start server immediately so API routes can be tested even if DB/Redis are not available in dev.
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
 
-// Initialize DB in background and log status.
+
 AppDataSource.initialize()
   .then(() => console.log('Data Source has been initialized!'))
   .catch((err) => console.error('Error during Data Source initialization:', err));

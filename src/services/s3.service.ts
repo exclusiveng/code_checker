@@ -17,7 +17,7 @@ export async function uploadBufferToS3(params: {
 }): Promise<string> {
   const { bucket, key, body, contentType } = params;
   await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }));
-  const publicUrlBase = process.env.S3_PUBLIC_URL_BASE; // e.g., https://your-cdn.example.com or https://<bucket>.s3.amazonaws.com
+  const publicUrlBase = process.env.S3_PUBLIC_URL_BASE; 
   if (publicUrlBase) return `${publicUrlBase.replace(/\/$/, '')}/${key}`;
   return `https://${bucket}.s3.amazonaws.com/${encodeURIComponent(key)}`;
 }

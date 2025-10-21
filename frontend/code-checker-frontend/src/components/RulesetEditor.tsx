@@ -3,13 +3,14 @@ import { Plus, Trash2, Save, Edit, Loader2 } from 'lucide-react';
 import { RuleModal } from './RuleModal';
 import { motion } from 'framer-motion';
 import api from '../api/api';
-// Define the RuleInput type locally for clarity, assuming it's not globally available.
-// In a real app, this would come from a shared types file, e.g., `../types`.
+
 export type RuleInput = {
-  id?: string; // Use a unique ID for list keys
-  type: 'filename-contains' | 'file-content-contains' | string;
-  payload: string;
-  severity: 'info' | 'warning' | 'error' | 'critical' | string;
+  id?: string; 
+  // keep flexible but prefer backend-friendly names
+  type: 'filepattern' | 'content' | string;
+  // payload can be a simple string or a structured object depending on rule type
+  payload: string | Record<string, any>;
+  severity: 'warning' | 'error' | string;
   message: string;
 };
 
@@ -21,7 +22,7 @@ interface RulesetEditorProps {
 }
 
 const defaultRule: RuleInput = {
-  type: 'filename-contains',
+  type: 'filepattern',
   payload: '',
   severity: 'warning',
   message: '',
@@ -36,13 +37,18 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
   const [editingRule, setEditingRule] = useState<RuleInput | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Ensure all rules have a unique ID for React keys when the component loads.
   useEffect(() => {
     setName(rulesetName);
     const fetchRules = async () => {
       setLoading(true);
       setError(null);
       try {
+        // If creating a new ruleset, don't attempt to fetch from backend
+        if (rulesetId === 'new') {
+          setRules([]);
+          return;
+        }
+
         const response = await api.get(`/rulesets/${rulesetId}`);
         setRules(
           (response.data.rules || []).map((rule: Omit<RuleInput, 'id'>, index: number) => ({
@@ -52,7 +58,7 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
         );
       } catch (err) {
         console.error('Failed to fetch ruleset details', err);
-        setError('Could not load rules for this ruleset.');
+        setError('Could not load rules for this ruleset. Please check the backend URL or your network connection.');
       } finally {
         setLoading(false);
       }
@@ -61,7 +67,6 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
   }, [rulesetId, rulesetName]);
 
   const handleAddRule = () => {
-    // Set to null to signify a new rule, letting the modal handle defaults.
     setEditingRule(null);
     setIsModalOpen(true);
   };
@@ -76,8 +81,6 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
   };
 
   const handleSaveRule = (ruleToSave: RuleInput) => {
-    // A rule is existing if its ID is already in our rules list.
-    // A new rule from the modal will have a new UUID not present in the list.
     const isExisting = ruleToSave.id ? rules.some((r) => r.id === ruleToSave.id) : false;
 
     if (isExisting) {
@@ -94,10 +97,18 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
     setError(null);
     try {
       const rulesToSave = rules.map(({ id, ...rest }) => rest);
-      await api.put(`/rulesets/${rulesetId}`, {
-        name: name,
-        rules: rulesToSave,
-      });
+      if (rulesetId === 'new') {
+        // create a new ruleset
+        await api.post(`/rulesets`, {
+          name: name,
+          rules: rulesToSave,
+        });
+      } else {
+        await api.put(`/rulesets/${rulesetId}`, {
+          name: name,
+          rules: rulesToSave,
+        });
+      }
       onSaveSuccess();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to save ruleset.');
@@ -147,7 +158,7 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
       <div className="space-y-3">
         {rules.map((rule, index) => (
           <motion.div
-            key={rule.id} // Use the guaranteed unique ID for the key
+            key={rule.id} 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             className="flex justify-between items-center border rounded-lg p-3 bg-gray-50/70"
@@ -155,7 +166,13 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
             <div className="flex-1">
               <p className="font-medium text-gray-700">{rule.message}</p>
               <p className="text-xs text-gray-500">
-                <span className="font-semibold">{rule.type}:</span> {rule.payload} • <span className="capitalize">{rule.severity}</span>
+                <span className="font-semibold">{rule.type}:</span>{' '}
+                {typeof rule.payload === 'string' ? (
+                  rule.payload
+                ) : (
+                  <code className="text-xs text-gray-600 bg-gray-100 px-1 rounded">{JSON.stringify(rule.payload)}</code>
+                )}{' '}
+                • <span className="capitalize">{rule.severity}</span>
               </p>
             </div>
             <div className="flex items-center gap-2">

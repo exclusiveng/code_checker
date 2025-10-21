@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, FileCode, CheckCircle, XCircle, Clock } from 'lucide-react';
 
-// Define the types for our data structure
 interface Project {
   id: string;
   name: string;
@@ -43,7 +42,6 @@ export const SubmissionList = () => {
       setError(null);
       try {
         const response = await api.get(`/submissions?page=${currentPage}`);
-        // This is the key fix: access the 'data' property of the response
         setSubmissions(response.data.data);
         setMeta(response.data.meta);
       } catch (err) {

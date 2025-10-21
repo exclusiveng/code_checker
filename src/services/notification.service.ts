@@ -22,7 +22,6 @@ class NotificationService {
       `Dispatching notification: ${payload.event} for submission ${payload.submissionId} with status ${payload.status}`,
     );
 
-    // If SMTP isn't configured, we can't send an email, so we stop here.
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
       console.warn('SMTP not configured. Skipping email notification.');
       return;
@@ -31,7 +30,7 @@ class NotificationService {
     const submissionRepository = AppDataSource.getRepository(Submission);
     const submission = await submissionRepository.findOne({
       where: { id: payload.submissionId },
-      relations: ['developer'], // Load the developer to get their email
+      relations: ['developer'],
     });
 
     if (!submission || !submission.developer) {

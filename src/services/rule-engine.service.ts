@@ -26,7 +26,6 @@ function getTextFilesFromZip(zip: any): { path: string; content: string }[] {
   const files: { path: string; content: string }[] = [];
   for (const entry of entries) {
     if (entry.isDirectory) continue;
-    // Read as text; if binary, may produce garbage but regex/content checks are text-first.
     const content = entry.getData().toString('utf8');
     files.push({ path: entry.entryName, content });
   }
@@ -92,7 +91,7 @@ function evaluateContentRule(rule: Rule, files: { path: string; content: string 
   const paths: string[] | undefined = payload.paths;
 
   // options in payload
-  const enforceLanguage: string | undefined = payload.language; // e.g. 'ts', 'js', 'cpp'
+  const enforceLanguage: string | undefined = payload.language;
   const requireNoEmoji: boolean = !!payload.noEmoji;
   const requireSyntaxValid: boolean = !!payload.syntax;
 
@@ -127,7 +126,7 @@ function evaluateContentRule(rule: Rule, files: { path: string; content: string 
           message: rule.message || `File ${file.path} does not match required language ${enforceLanguage}`,
           locations: [{ file: file.path }],
         });
-        // continue to other checks as well
+
       }
     }
 

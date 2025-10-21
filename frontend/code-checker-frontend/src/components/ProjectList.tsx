@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import { ChevronLeft, ChevronRight, GitBranch, ShieldCheck } from 'lucide-react';
 
-// Define the types for our data structure
+
 interface Ruleset {
   id: string;
   name: string;

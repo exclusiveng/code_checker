@@ -14,16 +14,13 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // If the initial auth check is done and the user is logged in,
-    // redirect them away from the login page to the dashboard.
     if (!isVerifying && isAuthenticated) {
       navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, isVerifying, navigate]);
 
-  // While checking auth status, render nothing to avoid a flash of the login form.
   if (isVerifying || isAuthenticated) {
-    return null; // or a loading spinner if you prefer
+    return null; 
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

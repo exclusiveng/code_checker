@@ -28,7 +28,6 @@ export const UploadForm: React.FC<UploadFormProps> = ({ onUploadComplete }) => {
     const fetchAllProjects = async () => {
       setProjectsLoading(true);
       try {
-        // Fetch all projects for the dropdown.
         const response = await api.get(`/companies/${user.companyId}/projects?limit=1000`);
         setProjects(response.data.data);
       } catch (err) {

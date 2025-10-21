@@ -39,7 +39,7 @@ if (shouldRunWorker) {
         // Load all rulesets associated with the project
         const rulesets = await rulesetRepository.find({
           where: { projectId: submission.projectId },
-          relations: ['rules'], // Explicitly load the rules associated with each ruleset
+          relations: ['rules'],
         });
 
         let rules: Rule[] = [];
@@ -61,7 +61,6 @@ if (shouldRunWorker) {
             }],
           };
           await submissionRepository.save(submission);
-          // We can stop processing here.
           return;
         }
 
@@ -123,6 +122,5 @@ if (shouldRunWorker) {
       console.error('Error during Data Source initialization for worker:', err);
     });
 } else {
-  // Not running worker; export nothing to avoid side effects when this module is imported.
-  // This file can still be executed directly with `npm run worker` or `RUN_WORKER=1 node ...`.
+
 }
