@@ -27,6 +27,10 @@ interface PaginationMeta {
 export const ProjectList = () => {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newRepo, setNewRepo] = useState('');
+  const [creating, setCreating] = useState(false);
   const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +69,47 @@ export const ProjectList = () => {
 
   return (
     <div className="space-y-6">
+      {/* Create project form for admins */}
+      {(user?.role === 'admin' || user?.role === 'super_admin') && (
+        <div className="p-4 border rounded-lg bg-white">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium">Create project</h3>
+            <button onClick={() => setShowCreate(s => !s)} className="text-sm text-blue-600">{showCreate ? 'Cancel' : 'New'}</button>
+          </div>
+          {showCreate && (
+            <form className="mt-3 space-y-2" onSubmit={async (e) => {
+              e.preventDefault();
+              if (!newName || !newRepo) return;
+              setCreating(true);
+              try {
+                await api.post(`/companies/${user.companyId}/projects`, { name: newName, repoUrl: newRepo });
+                setNewName(''); setNewRepo(''); setShowCreate(false);
+                // refresh
+                setLoading(true); setError(null);
+                const response = await api.get(`/companies/${user.companyId}/projects?page=${currentPage}`);
+                setProjects(response.data.data); setMeta(response.data.meta);
+              } catch (err) {
+                console.error('Failed to create project', err);
+                setError('Failed to create project.');
+              } finally {
+                setCreating(false); setLoading(false);
+              }
+            }}>
+              <div>
+                <label className="block text-xs text-gray-600">Project name</label>
+                <input required value={newName} onChange={e => setNewName(e.target.value)} className="mt-1 w-full p-2 border rounded" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600">Repository URL</label>
+                <input required value={newRepo} onChange={e => setNewRepo(e.target.value)} className="mt-1 w-full p-2 border rounded" />
+              </div>
+              <div>
+                <button disabled={creating} className="px-3 py-2 bg-blue-600 text-white rounded">{creating ? 'Creating...' : 'Create Project'}</button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
       {projects.length === 0 ? (
         <p className="text-center text-gray-500 p-8">No projects found.</p>
       ) : (
