@@ -49,17 +49,23 @@ export const uploadSubmission = (
       return res.status(400).json({ message: 'No file uploaded.' });
     }
 
-    const { projectId } = req.body;
-    if (!projectId) {
-      return next(new BadRequestError('projectId is required.'));
-    }
+    // Require projectId (UUID) only
+    const { projectId } = req.body as any;
+    if (!projectId) return next(new BadRequestError('projectId is required.'));
 
     const projectRepository = AppDataSource.getRepository(Project);
-    const project = await projectRepository.findOne({
-      where: { id: projectId },
-    });
+    const project = await projectRepository.findOne({ where: { id: projectId } });
     if (!project) {
       return next(new BadRequestError(`Project with id ${projectId} not found.`));
+    }
+
+    // Ensure the project has at least one ruleset configured. Processing relies
+    // on project-specific rules; if none exist, reject the upload with a helpful
+    // message to encourage creating a ruleset first.
+    const rulesetRepository = AppDataSource.getRepository(require('../entities/ruleset.entity').RuleSet);
+    const projectRulesets = await rulesetRepository.find({ where: { projectId } });
+    if (!projectRulesets || projectRulesets.length === 0) {
+      return next(new BadRequestError('This project does not have any rulesets configured. Create a ruleset for the project before uploading submissions.'));
     }
 
     const submissionRepository = AppDataSource.getRepository(Submission);

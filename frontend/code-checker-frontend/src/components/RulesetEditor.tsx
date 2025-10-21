@@ -3,6 +3,7 @@ import { Plus, Trash2, Save, Edit, Loader2 } from 'lucide-react';
 import { RuleModal } from './RuleModal';
 import { motion } from 'framer-motion';
 import api from '../api/api';
+import { useAuth } from '../hooks/useAuth';
 
 export type RuleInput = {
   id?: string; 
@@ -29,8 +30,11 @@ const defaultRule: RuleInput = {
 };
 
 export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, rulesetName, onSaveSuccess, onCancel }) => {
+  const { user } = useAuth();
   const [rules, setRules] = useState<RuleInput[]>([]);
   const [name, setName] = useState(rulesetName);
+  const [projectId, setProjectId] = useState<string>('');
+  const [projects, setProjects] = useState<Array<{ id: string; name: string; slug?: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -64,6 +68,18 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
       }
     };
     fetchRules();
+
+      // Also fetch projects for selection when creating a new ruleset
+      if (rulesetId === 'new' && user?.companyId) {
+        (async () => {
+          try {
+            const resp = await api.get(`/companies/${user.companyId}/projects?page=1`);
+            setProjects(resp.data.data || []);
+          } catch (e) {
+            console.error('Failed to fetch projects for ruleset creation', e);
+          }
+        })();
+      }
   }, [rulesetId, rulesetName]);
 
   const handleAddRule = () => {
@@ -98,10 +114,16 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
     try {
       const rulesToSave = rules.map(({ id, ...rest }) => rest);
       if (rulesetId === 'new') {
-        // create a new ruleset
+        // create a new ruleset - project selection required
+        if (!projectId) {
+          setError('Please select a project for this ruleset.');
+          setIsSaving(false);
+          return;
+        }
         await api.post(`/rulesets`, {
           name: name,
           rules: rulesToSave,
+          projectId,
         });
       } else {
         await api.put(`/rulesets/${rulesetId}`, {
@@ -135,6 +157,17 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
             className="text-xl font-semibold text-blue-600 bg-transparent border-b-2 border-transparent focus:border-blue-500 focus:outline-none"
           />
         </div>
+        {rulesetId === 'new' && (
+          <div className="ml-4">
+            <label className="block text-sm text-gray-600">Project</label>
+            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="border px-2 py-1 rounded">
+              <option value="">Select a project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} {p.slug ? `(${p.slug})` : ''}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <button
           onClick={handleAddRule}
           className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-all"

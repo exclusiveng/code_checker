@@ -10,6 +10,8 @@ interface UploadFormProps {
 interface Project {
   id: string;
   name: string;
+  slug?: string;
+  rulesets?: any[];
 }
 
 export const UploadForm: React.FC<UploadFormProps> = ({ onUploadComplete }) => {
@@ -52,6 +54,12 @@ export const UploadForm: React.FC<UploadFormProps> = ({ onUploadComplete }) => {
     e.preventDefault();
     if (!file || !projectId) {
       setError('Please select a project and a ZIP file.');
+      return;
+    }
+
+    const selectedProject = projects.find((p) => p.id === projectId);
+    if (selectedProject && (!selectedProject.rulesets || selectedProject.rulesets.length === 0)) {
+      setError('Selected project has no rulesets — please create or assign a ruleset before uploading.');
       return;
     }
 
@@ -107,11 +115,16 @@ export const UploadForm: React.FC<UploadFormProps> = ({ onUploadComplete }) => {
             <option value="" disabled>
               {projectsLoading ? 'Loading projects...' : 'Select a project'}
             </option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
+              {projects.map((project) => (
+                <option
+                  key={project.id}
+                  value={project.id}
+                  disabled={!project.rulesets || project.rulesets.length === 0}
+                >
+                  {project.name} {project.slug ? `(${project.slug})` : ''}
+                  {(!project.rulesets || project.rulesets.length === 0) ? ' (no rulesets)' : ''}
+                </option>
+              ))}
           </select>
         </div>
 

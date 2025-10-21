@@ -21,7 +21,7 @@ const limiter = rateLimit({
 import bodyParser from 'body-parser';
 import fs from 'fs';
 import path from 'path';
-import { spawn, fork } from 'child_process';
+import { startWorker } from './worker';
 
 // --- CORS Configuration ---
 // Allow requests from your React frontend development server
@@ -72,33 +72,29 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 });
 
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-
-  const startWorker = process.env.START_WORKER_WITH_SERVER === '1' || process.env.RUN_WORKER === '1';
-  if (startWorker) {
-    try {
-      const distWorker = path.join(__dirname, 'worker.js');
-      const srcWorker = path.join(__dirname, '..', 'src', 'worker.ts');
-
-      if (fs.existsSync(distWorker)) {
-        // Fork the compiled worker (production)
-        const child = fork(distWorker, [], { stdio: 'inherit' });
-        child.on('exit', (code) => console.log(`Worker process exited with code ${code}`));
-      } else if (fs.existsSync(srcWorker)) {
-        // Spawn node with ts-node/register to run the TypeScript worker in dev
-        const child = spawn(process.execPath, ['-r', 'ts-node/register', srcWorker], { stdio: 'inherit' });
-        child.on('exit', (code) => console.log(`Worker (ts) process exited with code ${code}`));
-      } else {
-        console.warn('Worker entry not found (dist/worker.js or src/worker.ts). Worker not started.');
-      }
-    } catch (err) {
-      console.error('Failed to start worker process with server:', err);
-    }
-  }
-});
-
-
+// Boot sequence: initialize DB, optionally run backfill, then start server and worker.
 AppDataSource.initialize()
-  .then(() => console.log('Data Source has been initialized!'))
+  .then(async () => {
+    console.log('Data Source has been initialized!');
+    if (process.env.RUN_PROJECT_SLUG_BACKFILL === '1') {
+      try {
+        const { backfillProjectSlugs } = await import('./utils/backfill-project-slugs');
+        await backfillProjectSlugs();
+        console.log('Project slug backfill completed');
+      } catch (e) {
+        console.error('Project slug backfill failed', e);
+      }
+    }
+
+    app.listen(port, () => {
+      console.log(`Server is running on port ${port}`);
+
+      const explicitStart = process.env.START_WORKER_WITH_SERVER === '1' || process.env.RUN_WORKER === '1';
+      const inDevAutoStart = process.env.NODE_ENV !== 'production' && process.env.START_WORKER_WITH_SERVER !== '0';
+      if (explicitStart || inDevAutoStart) {
+        // Start the worker in-process so server+worker run together (suitable for single-instance deployments)
+        startWorker().catch((err) => console.error('Failed to start in-process worker:', err));
+      }
+    });
+  })
   .catch((err) => console.error('Error during Data Source initialization:', err));

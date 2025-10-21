@@ -42,7 +42,7 @@ export class RuleSet {
     @Column({ nullable: true })
     description: string;
     
-    @Column({ name: 'project_id', nullable: true }) // A ruleset can be unassigned
+    @Column({ name: 'project_id', nullable: true })
     projectId: string;
 
     @ManyToOne(() => Project, project => project.rulesets)

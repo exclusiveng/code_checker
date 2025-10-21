@@ -23,16 +23,23 @@ export const createRuleset = async (req: Request, res: Response, next: NextFunct
   }
 
   const rulesetRepository = AppDataSource.getRepository(RuleSet);
+  const projectRepository = AppDataSource.getRepository(require('../entities/project.entity').Project);
 
   const companyId = req.user?.companyId;
   if (!companyId) return next(new BadRequestError('Authenticated user not found'));
+
+  // Require projectId (UUID) to associate this ruleset with a project
+  if (!projectId) return next(new BadRequestError('projectId is required for a ruleset'));
+  const p = await projectRepository.findOne({ where: { id: projectId, companyId } });
+  if (!p) return next(new BadRequestError('Invalid projectId'));
+  const resolvedProjectId = p.id;
 
   const newRuleset = rulesetRepository.create({
     name,
     description,
     rules, // TypeORM will automatically create RuleEntity instances from this raw data
     companyId,
-    projectId
+    projectId: resolvedProjectId,
   });
   try {
     await rulesetRepository.save(newRuleset);

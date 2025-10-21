@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, OneToMany, ManyToMany, JoinTable } from 'typeorm';
+import { Index } from 'typeorm';
 import { Company } from './company.entity';
 import { RuleSet } from './ruleset.entity';
 import { Submission } from './submission.entity';
@@ -7,6 +8,10 @@ import { Submission } from './submission.entity';
 export class Project {
     @PrimaryGeneratedColumn('uuid')
     id: string;
+
+    @Index({ unique: true })
+    @Column({ name: 'slug', nullable: false })
+    slug: string;
 
     @Column({ name: 'company_id' })
     companyId: string;

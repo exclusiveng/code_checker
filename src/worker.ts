@@ -1,4 +1,5 @@
 import { Worker, Job } from 'bullmq';
+import { subscribeInMemorySubmissionProcessor } from './config/queue';
 import { AppDataSource } from './config/data-source';
 import { Submission, SubmissionStatus } from './entities/submission.entity';
 import { Project } from './entities/project.entity';
@@ -9,106 +10,154 @@ import * as dotenv from 'dotenv';
 import { notificationService, NotificationEvent } from './services/notification.service';
 
 dotenv.config();
-// Export a function to start the worker. This allows the server process to
-// initialize the worker in-process by calling startWorker(). It also keeps
-// the file runnable directly (via RUN_WORKER=1 or `node dist/worker.js`).
-export async function startWorker() {
-  const connection = {
-    host: process.env.REDIS_HOST || '127.0.0.1',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
-  };
+
+// Global handlers to surface problems and avoid silent exits during dev.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection in worker:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception in worker:', err);
+});
+
+async function processSubmission(submissionId: string) {
+  console.log(`Processing submission ${submissionId}`);
+
+  const submissionRepository = AppDataSource.getRepository(Submission);
+  const projectRepository = AppDataSource.getRepository(Project);
+  const rulesetRepository = AppDataSource.getRepository(RuleSet);
+
+  const submission = await submissionRepository.findOne({ where: { id: submissionId } });
+  if (!submission) {
+    console.warn(`Submission ${submissionId} not found`);
+    return;
+  }
+
+  // Load all rulesets associated with the project
+  const rulesets = await rulesetRepository.find({
+    where: { projectId: submission.projectId },
+    relations: ['rules'],
+  });
+
+  let rules: Rule[] = [];
+  for (const ruleset of rulesets) {
+    console.log(`Using ruleset "${ruleset.name}" (ID: ${ruleset.id}) for submission ${submissionId}`);
+    rules.push(...(ruleset.rules || []));
+  }
+
+  // If no rules are found, fail the submission.
+  if (rules.length === 0) {
+    console.warn(`No rules found for project ${submission.projectId}. Marking submission as failed.`);
+    submission.status = SubmissionStatus.FAILED;
+    submission.results = {
+      findings: [
+        {
+          ruleId: 'system-error',
+          severity: RuleSeverity.ERROR,
+          message: 'No ruleset is configured for this project. Analysis could not be performed.',
+          locations: [],
+        },
+      ],
+    };
+    await submissionRepository.save(submission);
+    return;
+  }
+
+  // Evaluate rules against the uploaded zip
+  let findings: RuleFinding[] = [];
+  let hasErrors = false;
+  try {
+    const evaluationResult = await evaluateRulesAgainstZip(submission.zipUrl, rules);
+    findings = evaluationResult.findings;
+    hasErrors = evaluationResult.hasErrors;
+  } catch (evaluationError: any) {
+    console.error(`Rule evaluation failed for submission ${submissionId}:`, evaluationError);
+    findings = [];
+    hasErrors = true;
+    submission.results = {
+      findings: [
+        {
+          ruleId: 'rule-evaluation-error',
+          severity: 'error' as RuleSeverity,
+          message: `Rule evaluation failed: ${evaluationError.message}`,
+          locations: [],
+        },
+      ],
+    };
+  }
+
+  submission.results = { findings };
+  submission.status = hasErrors ? SubmissionStatus.FAILED : SubmissionStatus.PASSED;
+  await submissionRepository.save(submission);
 
   try {
-    await AppDataSource.initialize();
-    console.log('Data Source has been initialized for worker!');
+    await notificationService.send({
+      event: NotificationEvent.SUBMISSION_PROCESSED,
+      submissionId: submission.id,
+      status: submission.status,
+    });
+  } catch (err) {
+    console.error('Failed to send processed notification', err);
+  }
 
-    const worker: Worker = new Worker(
-      'submission-analysis',
-      async (job: Job) : Promise<Worker | void> => {
-        const { submissionId } = job.data;
-        console.log(`Processing submission ${submissionId}`);
+  console.log(`Submission ${submissionId} processed successfully`);
+}
 
-        const submissionRepository = AppDataSource.getRepository(Submission);
-        const projectRepository = AppDataSource.getRepository(Project);
-        const rulesetRepository = AppDataSource.getRepository(RuleSet);
-        const submission = await submissionRepository.findOne({ where: { id: submissionId } });
+// Exported start function that will initialize DB and start listening for jobs.
+export async function startWorker() {
+  const hasRedisConfig = !!process.env.REDIS_HOST || !!process.env.REDIS_URL || !!process.env.REDIS_PORT;
+  const forceInMemory = process.env.USE_IN_MEMORY_QUEUE === '1';
+  const shouldUseInMemory = forceInMemory || !hasRedisConfig;
 
-        if (!submission) {
-          throw new Error('Submission not found');
-        }
+  try {
+    if (!AppDataSource.isInitialized) {
+      await AppDataSource.initialize();
+      console.log('Data Source has been initialized for worker!');
+    } else {
+      console.log('AppDataSource already initialized; worker will reuse existing connection');
+    }
 
-        // Load all rulesets associated with the project
-        const rulesets = await rulesetRepository.find({
-          where: { projectId: submission.projectId },
-          relations: ['rules'],
-        });
+    if (shouldUseInMemory) {
+      subscribeInMemorySubmissionProcessor(async (job) => {
+        const submissionId = job.data.submissionId;
+        await processSubmission(submissionId);
+      });
+      console.log('Using in-memory submission queue. Worker ready.');
+      // If this module is being run directly (standalone worker), keep the
+      // process alive so it can continue handling submitted jobs.
+      if (require.main === module) {
+        console.log('Worker running standalone — keeping process alive.');
+        // Keep event loop alive
+        process.stdin.resume();
+      }
+      return;
+    }
 
-        let rules: Rule[] = [];
-        for (const ruleset of rulesets) {
-          console.log(`Using ruleset "${ruleset.name}" (ID: ${ruleset.id}) for submission ${submissionId}`);
-          rules.push(...(ruleset.rules || []));
-        }
-
-        // If no rules are found, we should fail the submission.
-        if (rules.length === 0) {
-          console.warn(`No rules found for project ${submission.projectId}. Marking submission as failed.`);
-          submission.status = SubmissionStatus.FAILED;
-          submission.results = {
-            findings: [
-              {
-                ruleId: 'system-error',
-                severity: RuleSeverity.ERROR,
-                message: 'No ruleset is configured for this project. Analysis could not be performed.',
-                locations: [],
-              },
-            ],
-          };
-          await submissionRepository.save(submission);
-          return worker;
-        }
-
-        // Evaluate rules against the uploaded zip
-        let findings: RuleFinding[] = [];
-        let hasErrors = false;
-        try {
-          const evaluationResult = await evaluateRulesAgainstZip(submission.zipUrl, rules);
-          findings = evaluationResult.findings;
-          hasErrors = evaluationResult.hasErrors;
-        } catch (evaluationError: any) {
-          console.error(`Rule evaluation failed for submission ${submissionId}:`, evaluationError);
-          findings = [];
-          hasErrors = true;
-          submission.results = {
-            findings: [
-              {
-                ruleId: 'rule-evaluation-error',
-                severity: 'error' as RuleSeverity,
-                message: `Rule evaluation failed: ${evaluationError.message}`,
-                locations: [],
-              },
-            ],
-          };
-        }
-
-        submission.results = { findings };
-        submission.status = hasErrors ? SubmissionStatus.FAILED : SubmissionStatus.PASSED;
-        await submissionRepository.save(submission);
-
-        try {
-          await notificationService.send({
-            event: NotificationEvent.SUBMISSION_PROCESSED,
-            submissionId: submission.id,
-            status: submission.status,
-          });
-        } catch (err) {
-          console.error('Failed to send processed notification', err);
-        }
-
-        console.log(`Submission ${submissionId} processed successfully`);
-        return worker;
-      },
-      { connection }
-    );
+    // Only configure a Redis connection if explicit config is present
+    let worker: Worker | undefined;
+    if (process.env.REDIS_URL) {
+      worker = new Worker(
+        'submission-analysis',
+        async (job: Job) => {
+          const submissionId = job.data.submissionId;
+          await processSubmission(submissionId);
+        },
+        { connection: { url: process.env.REDIS_URL } }
+      );
+    } else if (process.env.REDIS_HOST && process.env.REDIS_PORT) {
+      worker = new Worker(
+        'submission-analysis',
+        async (job: Job) => {
+          const submissionId = job.data.submissionId;
+          await processSubmission(submissionId);
+        },
+        { connection: { host: process.env.REDIS_HOST, port: parseInt(process.env.REDIS_PORT, 10) } }
+      );
+    } else {
+      // Should not reach here because shouldUseInMemory covers missing configs,
+      // but guard defensively.
+      console.warn('No Redis configuration found; in-memory queue should have been used.');
+      return;
+    }
 
     worker.on('completed', (job: Job | undefined) => {
       if (!job) return;
@@ -135,16 +184,14 @@ export async function startWorker() {
     });
 
     console.log('Worker started and is now listening for jobs...');
-    return worker;
   } catch (err) {
     console.error('Error during Data Source initialization for worker:', err);
     throw err;
   }
 }
 
-// Keep backwards-compatibility: if worker.ts is run directly or RUN_WORKER=1 is set,
-// start the worker immediately.
-const shouldRunWorker = require.main === module || process.env.RUN_WORKER === '1';
-if (shouldRunWorker) {
+// Backwards compatibility: run when invoked directly or via RUN_WORKER=1
+const shouldRunWorkerDirectly = require.main === module || process.env.RUN_WORKER === '1';
+if (shouldRunWorkerDirectly) {
   startWorker().catch((err) => console.error('Worker failed to start:', err));
 }

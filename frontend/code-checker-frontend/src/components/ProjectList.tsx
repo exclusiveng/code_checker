@@ -13,6 +13,7 @@ interface Ruleset {
 interface Project {
   id: string;
   name: string;
+  slug?: string;
   repoUrl: string;
   createdAt: string;
   rulesets: Ruleset[];
@@ -121,7 +122,7 @@ export const ProjectList = () => {
             transition={{ delay: index * 0.05 }}
             className="p-4 border rounded-lg bg-gray-50/50"
           >
-            <h3 className="font-semibold text-lg text-blue-700">{project.name}</h3>
+            <h3 className="font-semibold text-lg text-blue-700">{project.name} {project.slug ? <span className="text-sm text-gray-400">({project.slug})</span> : null}</h3>
             <a href={project.repoUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 hover:underline flex items-center gap-2 mt-1">
               <GitBranch size={14} /> {project.repoUrl}
             </a>

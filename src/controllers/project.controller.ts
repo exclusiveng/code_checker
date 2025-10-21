@@ -27,7 +27,22 @@ export const createProject = async (req: Request, res: Response, next: NextFunct
     }
   }
 
-  const project = projectRepository.create({ name, repoUrl, companyId, rulesets });
+  // generate a slug/id from name to be used as a human-friendly identifier
+  const baseSlug = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  let slug = baseSlug;
+  let attempt = 0;
+  while (await projectRepository.findOne({ where: { companyId, slug } })) {
+    attempt++;
+    slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+    if (attempt > 5) break; // avoid infinite loop
+  }
+
+  const project = projectRepository.create({ name, repoUrl, companyId, rulesets, slug });
   await projectRepository.save(project);
 
   res.status(201).json(project);
