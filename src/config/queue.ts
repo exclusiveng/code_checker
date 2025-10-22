@@ -11,10 +11,19 @@ dotenv.config();
 
 let _submissionQueue: any = null;
 let _inMemoryListeners: Array<(job: { id: string; name: string; data: any }) => Promise<any>> = [];
+// Pending jobs that were enqueued before any listener was registered.
+let _inMemoryPendingJobs: Array<{ id: string; name: string; data: any }> = [];
 
 class InMemoryQueue {
   async add(name: string, data: any) {
     const job = { id: randomUUID(), name, data };
+    // If no listeners are registered yet, buffer the job so it isn't lost.
+    if (_inMemoryListeners.length === 0) {
+      _inMemoryPendingJobs.push(job);
+      // Don't await anything here; caller expects add() to be fast.
+      return job;
+    }
+
     // schedule delivery on next tick so caller doesn't block
     setImmediate(() => {
       for (const l of _inMemoryListeners) {
@@ -29,6 +38,19 @@ class InMemoryQueue {
 
 export function subscribeInMemorySubmissionProcessor(fn: (job: { id: string; name: string; data: any }) => Promise<any>) {
   _inMemoryListeners.push(fn);
+  // Flush any pending jobs to the newly registered listener(s). Deliver jobs
+  // on next tick to keep behavior consistent with add().
+  if (_inMemoryPendingJobs.length > 0) {
+    const pending = _inMemoryPendingJobs.splice(0, _inMemoryPendingJobs.length);
+    setImmediate(() => {
+      for (const job of pending) {
+        // deliver to all registered listeners
+        for (const l of _inMemoryListeners) {
+          l(job).catch((err) => console.error('InMemoryQueue pending job handler error', err));
+        }
+      }
+    });
+  }
 }
 
 export function getSubmissionQueue(): any {
