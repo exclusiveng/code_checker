@@ -22,8 +22,11 @@ class NotificationService {
       `Dispatching notification: ${payload.event} for submission ${payload.submissionId} with status ${payload.status}`,
     );
 
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.warn('SMTP not configured. Skipping email notification.');
+    // Temporarily disable sending emails when DISABLE_EMAILS=1. This avoids
+    // unreachable-code TypeScript errors while allowing the feature to be
+    // toggled at runtime without removing the implementation.
+    if (process.env.DISABLE_EMAILS === '1') {
+      console.log('Email notifications are currently disabled (temporary). Skipping send.');
       return;
     }
 
