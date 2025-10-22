@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: code-checker
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm run build
+    startCommand: npm run start:migrate
+    envVars:
+      - key: START_WORKER_WITH_SERVER
+        value: "1"
+      - key: USE_IN_MEMORY_QUEUE
+        value: "1"
+# Note: sensitive values like DATABASE_URL, JWT_PRIVATE_KEY, JWT_PUBLIC_KEY, S3 credentials
+# should be added to Render as secure environment variables (not checked into repo).
+# Add them via the Render dashboard or use the `secrets` section if you manage them in the repo.
