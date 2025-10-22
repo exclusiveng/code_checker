@@ -102,6 +102,13 @@ async function processSubmission(submissionId: string) {
   console.log(`Submission ${submissionId} processed successfully`);
 }
 
+// Simple status object for runtime diagnostics
+export const workerStatus = {
+  started: false,
+  queueType: 'unknown' as 'unknown' | 'in-memory' | 'redis',
+  lastError: null as string | null,
+};
+
 // Exported start function that will initialize DB and start listening for jobs.
 export async function startWorker() {
   const hasRedisConfig = !!process.env.REDIS_HOST || !!process.env.REDIS_URL || !!process.env.REDIS_PORT;
@@ -121,6 +128,8 @@ export async function startWorker() {
         const submissionId = job.data.submissionId;
         await processSubmission(submissionId);
       });
+      workerStatus.queueType = 'in-memory';
+      workerStatus.started = true;
       console.log('Using in-memory submission queue. Worker ready.');
       // If this module is being run directly (standalone worker), keep the
       // process alive so it can continue handling submitted jobs.
@@ -143,6 +152,7 @@ export async function startWorker() {
         },
         { connection: { url: process.env.REDIS_URL } }
       );
+      workerStatus.queueType = 'redis';
     } else if (process.env.REDIS_HOST && process.env.REDIS_PORT) {
       worker = new Worker(
         'submission-analysis',
@@ -152,6 +162,7 @@ export async function startWorker() {
         },
         { connection: { host: process.env.REDIS_HOST, port: parseInt(process.env.REDIS_PORT, 10) } }
       );
+      workerStatus.queueType = 'redis';
     } else {
       // Should not reach here because shouldUseInMemory covers missing configs,
       // but guard defensively.
@@ -182,6 +193,9 @@ export async function startWorker() {
         console.error('Failed handling failed event', e);
       }
     });
+
+    // mark started if worker created successfully
+    workerStatus.started = true;
 
     console.log('Worker started and is now listening for jobs...');
   } catch (err) {
