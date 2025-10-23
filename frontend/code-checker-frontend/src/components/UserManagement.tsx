@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, UserPlus, Users, Shield, Briefcase, Edit, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Loader2, UserPlus, Users, Shield, Briefcase, Edit, Trash2, X, AlertTriangle } from 'lucide-react';
 import api from '../api/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -24,8 +25,12 @@ export const UserManagement: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // State for modals
+  const [editingUser, setEditingUser] = useState<CompanyUser | null>(null);
+  const [deletingUser, setDeletingUser] = useState<CompanyUser | null>(null);
+
   const fetchUsers = async () => {
-    if (!user?.companyId) return; // ✅ Only one check needed
+    if (!user?.companyId) return;
     setLoadingUsers(true);
     try {
       const response = await api.get(`/users`);
@@ -50,22 +55,47 @@ export const UserManagement: React.FC = () => {
     setRole('developer');
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      try {
-        await api.delete(`/users/${userId}`);
-        setUsers(users.filter((u) => u.id !== userId));
-      } catch (err: any) {
-        setError(err.response?.data?.message || 'Failed to delete user.');
-        console.error('Failed to delete user', err);
-      }
+  const openDeleteModal = (userId: string) => {
+    const userToDelete = users.find((u) => u.id === userId);
+    if (userToDelete) setDeletingUser(userToDelete);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!deletingUser) return;
+    try {
+      await api.delete(`/users/${deletingUser.id}`);
+      setUsers(users.filter((u) => u.id !== deletingUser.id));
+      setDeletingUser(null);
+      setSuccessMessage(`User "${deletingUser.name}" has been deleted.`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to delete user.');
+      console.error('Failed to delete user', err);
     }
   };
 
-  const handleEditUser = (userId: string) => {
+  const openEditModal = (userId: string) => {
     const userToEdit = users.find((u) => u.id === userId);
     if (userToEdit) {
-      console.log('Editing user:', userToEdit);
+      setEditingUser(userToEdit);
+    }
+  };
+
+  const handleUpdateUser = async () => {
+    if (!editingUser) return;
+    try {
+      const response = await api.put(`/users/${editingUser.id}`, {
+        name: editingUser.name,
+        role: editingUser.role,
+      });
+      setUsers(users.map(u => u.id === editingUser.id ? response.data : u));
+      setEditingUser(null);
+      setSuccessMessage(`User "${editingUser.name}" has been updated.`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      // You might want to display this error inside the modal
+      console.error('Failed to update user', err);
+      alert(err.response?.data?.message || 'Failed to update user.');
     }
   };
 
@@ -135,13 +165,13 @@ export const UserManagement: React.FC = () => {
                     {u.role.replace('_', ' ')}
                   </div>
                   <button
-                    onClick={() => handleEditUser(u.id)}
+                    onClick={() => openEditModal(u.id)}
                     className="text-gray-500 hover:text-blue-600 transition-colors"
                   >
                     <Edit size={16} />
                   </button>
                   <button
-                    onClick={() => handleDeleteUser(u.id)}
+                    onClick={() => openDeleteModal(u.id)}
                     className="text-gray-400 hover:text-red-600 transition-colors"
                   >
                     <Trash2 size={16} />
@@ -158,7 +188,7 @@ export const UserManagement: React.FC = () => {
         <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-800 mb-2">Register New User</h2>
           <p className="text-gray-500 text-sm mb-6">
-            Add a new user to your company. They will be invited to join via email.
+            Add a new user to your company.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -234,6 +264,115 @@ export const UserManagement: React.FC = () => {
           </form>
         </div>
       </div>
+
+      {/* Edit User Modal */}
+      <AnimatePresence>
+        {editingUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setEditingUser(null)}
+          >
+            <motion.div
+              initial={{ y: -50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 50, opacity: 0 }}
+              className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-semibold text-gray-800">Edit User</h3>
+                <button onClick={() => setEditingUser(null)} className="text-gray-500 hover:text-gray-800">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    value={editingUser.name}
+                    onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email (read-only)</label>
+                  <input
+                    type="email"
+                    value={editingUser.email}
+                    readOnly
+                    className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-gray-100 cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                  <select
+                    value={editingUser.role}
+                    onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as CompanyUser['role'] })}
+                    className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                  >
+                    <option value="developer">Developer</option>
+                    <option value="reviewer">Reviewer</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end gap-3">
+                <button onClick={() => setEditingUser(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+                <button onClick={handleUpdateUser} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Save Changes</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deletingUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setDeletingUser(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 mt-4">Delete User</h3>
+                <p className="text-sm text-gray-500 mt-2">
+                  Are you sure you want to delete <span className="font-bold">{deletingUser.name}</span>? This action cannot be undone.
+                </p>
+              </div>
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setDeletingUser(null)}
+                  className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteUser}
+                  className="w-full px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

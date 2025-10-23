@@ -77,14 +77,15 @@ export const getUsers = async (
     const userRepository = AppDataSource.getRepository(User);
     const where: { companyId?: string } = {};
 
-    // Super admin can see all users, Admins can see users in their own company
+    // Admins can only see users in their own company.
     if (req.user.role === UserRole.ADMIN) {
-      if (!req.user.companyId)
+      if (!req.user.companyId) {
         return next(new BadRequestError('Authenticated user has no company'));
+      }
       where.companyId = req.user.companyId;
     } else if (req.user.role !== UserRole.SUPER_ADMIN) {
-      // Other roles are not allowed to list users
-      return next(new ForbiddenError('Insufficient permissions to list users'));
+      // Non-admin/super_admin roles cannot list users.
+      return next(new ForbiddenError('Insufficient permissions.'));
     }
 
     const [users, total] = await userRepository.findAndCount({
