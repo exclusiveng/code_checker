@@ -67,46 +67,51 @@ export const getUsers = async (
   next: NextFunction,
 ) => {
   try {
-    if (!req.user)
+    if (!req.user) {
       return next(new BadRequestError('Authenticated user not found'));
+    }
 
     const page = parseInt(req.query.page as string, 10) || 1;
     const limit = parseInt(req.query.limit as string, 10) || 10;
     const skip = (page - 1) * limit;
 
     const userRepository = AppDataSource.getRepository(User);
-    const where: { companyId?: string } = {};
 
-    // Admins can only see users in their own company.
-    if (req.user.role === UserRole.ADMIN) {
+    const qb = userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.company', 'company')
+      .orderBy('user.createdAt', 'DESC')
+      .take(limit)
+      .skip(skip);
+
+    // ✅ Both ADMIN and SUPER_ADMIN see only their own company's users
+    if (
+      req.user.role === UserRole.ADMIN ||
+      req.user.role === UserRole.SUPER_ADMIN
+    ) {
       if (!req.user.companyId) {
         return next(new BadRequestError('Authenticated user has no company'));
       }
-      where.companyId = req.user.companyId;
-    } else if (req.user.role !== UserRole.SUPER_ADMIN) {
-      // Non-admin/super_admin roles cannot list users.
+
+      qb.where('user.companyId = :companyId', { companyId: req.user.companyId });
+    } else {
+      // ❌ Other roles cannot list users
       return next(new ForbiddenError('Insufficient permissions.'));
     }
 
-    const [users, total] = await userRepository.findAndCount({
-      where,
-      order: { createdAt: 'DESC' },
-      take: limit,
-      skip,
-    });
+    const [users, total] = await qb.getManyAndCount();
 
     return res.json({
       users,
-      pagination: {
-        total,
-        page,
-        limit,
-      },
+      pagination: { total, page, limit },
     });
   } catch (err) {
     return next(err);
   }
 };
+
+
+
 
 export const updateUser = async (
   req: Request,
