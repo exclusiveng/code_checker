@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppDataSource } from '../config/data-source';
 import { User, UserRole } from '../entities/user.entity';
-import { BadRequestError, ForbiddenError } from '../utils/errors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/errors';
 import * as bcrypt from 'bcryptjs';
+import { tryCatch } from 'bullmq';
 
 export const createUser = async (
   req: Request,
@@ -101,6 +102,104 @@ export const getUsers = async (
         limit,
       },
     });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const updateUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id: userIdToUpdate } = req.params;
+    const { name, role } = req.body as { name?: string; role?: UserRole };
+    const authenticatedUser = req.user;
+
+    if (!authenticatedUser) {
+      return next(new ForbiddenError('Authentication required.'));
+    }
+
+    const userRepository = AppDataSource.getRepository(User);
+    const userToUpdate = await userRepository.findOneBy({ id: userIdToUpdate });
+
+    if (!userToUpdate) {
+      return next(new NotFoundError(`User with ID ${userIdToUpdate} not found.`));
+    }
+
+    // Permission checks
+    if (authenticatedUser.role === UserRole.ADMIN) {
+      if (
+        userToUpdate.companyId !== authenticatedUser.companyId || // Can't edit users outside their company
+        userToUpdate.role === UserRole.SUPER_ADMIN || // Can't edit a super_admin
+        (userToUpdate.role === UserRole.ADMIN && userToUpdate.id !== authenticatedUser.id) || // Can't edit other admins
+        role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN // Can't promote users to admin
+      ) {
+        return next(new ForbiddenError('Insufficient permissions to edit this user or assign this role.'));
+      }
+    } else if (authenticatedUser.role !== UserRole.SUPER_ADMIN) {
+      return next(new ForbiddenError('Insufficient permissions.'));
+    }
+
+    // Apply updates
+    if (name) userToUpdate.name = name;
+    if (role) userToUpdate.role = role;
+
+    await userRepository.save(userToUpdate);
+
+    // Omit passwordHash from the response
+    const { passwordHash, ...userResponse } = userToUpdate;
+    res.json(userResponse);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const deleteUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id: userIdToDelete } = req.params;
+    const authenticatedUser = req.user;
+
+    if (!authenticatedUser) {
+      return next(new ForbiddenError('Authentication required.'));
+    }
+
+    if (userIdToDelete === authenticatedUser.id) {
+      return next(new ForbiddenError('You cannot delete your own account.'));
+    }
+
+    const userRepository = AppDataSource.getRepository(User);
+    const userToDelete = await userRepository.findOneBy({ id: userIdToDelete });
+
+    if (!userToDelete) {
+      return next(new NotFoundError(`User with ID ${userIdToDelete} not found.`));
+    }
+
+    // Permission check
+    if (authenticatedUser.role === UserRole.ADMIN) {
+      // Admins can only delete non-admin users in their own company
+      if (
+        userToDelete.companyId !== authenticatedUser.companyId ||
+        userToDelete.role === UserRole.ADMIN ||
+        userToDelete.role === UserRole.SUPER_ADMIN
+      ) {
+        return next(
+          new ForbiddenError('Insufficient permissions to delete this user.'),
+        );
+      }
+    } else if (authenticatedUser.role !== UserRole.SUPER_ADMIN) {
+      // Only admins and super_admins can delete users
+      return next(new ForbiddenError('Insufficient permissions.'));
+    }
+
+    await userRepository.remove(userToDelete);
+
+    res.status(204).send();
   } catch (err) {
     return next(err);
   }
