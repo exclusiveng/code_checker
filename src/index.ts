@@ -25,9 +25,20 @@ import { startWorker } from './worker';
 
 // --- CORS Configuration ---
 // Allow requests from your React frontend development server
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://dev-codetester.web.app'
+];
+
 const corsOptions = {
-  origin: 'http://localhost:5173',
-  optionsSuccessStatus: 200, // For legacy browser support
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  optionsSuccessStatus: 200 // For legacy browser support
 };
 app.use(cors(corsOptions));
 
