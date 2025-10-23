@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, FileJson, FileText } from 'lucide-react';
+import { X, FileJson, FileText, ChevronDown, Check } from 'lucide-react';
 import { RuleInput } from './RulesetEditor';
 
 interface RuleModalProps {
@@ -10,6 +10,169 @@ interface RuleModalProps {
   rule: RuleInput | null;
   defaultRule: RuleInput;
 }
+
+const ruleTemplates: Array<{ name: string; rule: Omit<RuleInput, 'id'> }> = [
+  // Custom empty rule
+  {
+    name: 'Custom Rule',
+    rule: {
+      type: 'filepattern',
+      payload: '',
+      severity: 'warning',
+      message: '',
+    },
+  },
+
+  // File presence rules
+  {
+    name: 'Enforce README.md file',
+    rule: {
+      type: 'filepattern',
+      payload: { require: ['README.md'] },
+      severity: 'warning',
+      message: 'A README.md file is missing from the project root.',
+    },
+  },
+  {
+    name: 'Enforce package.json file',
+    rule: {
+      type: 'filepattern',
+      payload: { require: ['package.json'] },
+      severity: 'error',
+      message: 'package.json is required for project dependency management.',
+    },
+  },
+  {
+    name: 'Enforce .gitignore presence',
+    rule: {
+      type: 'filepattern',
+      payload: { require: ['.gitignore'] },
+      severity: 'warning',
+      message: '.gitignore file is missing, which may expose sensitive files.',
+    },
+  },
+
+  // Block unwanted files
+  {
+    name: 'Block .env files from being committed',
+    rule: {
+      type: 'filepattern',
+      payload: { block: ['**/.env'] },
+      severity: 'error',
+      message: 'Environment file (.env) should not be committed to the repository.',
+    },
+  },
+  {
+    name: 'Block node_modules directory',
+    rule: {
+      type: 'filepattern',
+      payload: { block: ['**/node_modules/**'] },
+      severity: 'warning',
+      message: 'node_modules should not be committed to the repository.',
+    },
+  },
+  {
+    name: 'Block build/dist folders',
+    rule: {
+      type: 'filepattern',
+      payload: { block: ['dist/**', 'build/**'] },
+      severity: 'warning',
+      message: 'Build artifacts should not be committed.',
+    },
+  },
+
+  // Content rules
+  {
+    name: 'Discourage `console.log` statements',
+    rule: {
+      type: 'content',
+      payload: {
+        banned: ['console\\.log'],
+        paths: ['src/**/*.ts', 'src/**/*.js'],
+        syntax: true,
+        language: 'ts',
+      },
+      severity: 'warning',
+      message: "Found 'console.log' statement. Consider removing for production.",
+    },
+  },
+  {
+    name: 'Disallow TODO comments in code',
+    rule: {
+      type: 'content',
+      payload: {
+        banned: ['TODO'],
+        paths: ['src/**/*.ts', 'src/**/*.js'],
+        syntax: true,
+        language: 'ts',
+      },
+      severity: 'warning',
+      message: "TODO comments should be resolved before production.",
+    },
+  },
+  {
+    name: 'Disallow emoji in code',
+    rule: {
+      type: 'content',
+      payload: {
+        noEmoji: true,
+        paths: ['src/**/*.ts', 'src/**/*.js'],
+        syntax: true,
+        language: 'ts',
+      },
+      severity: 'warning',
+      message: 'Emoji detected in code, which may break parsers or linters.',
+    },
+  },
+  {
+    name: 'Require function comments / documentation',
+    rule: {
+      type: 'content',
+      payload: {
+        banned: ['function\\s+\\w+\\('],
+        paths: ['src/**/*.ts', 'src/**/*.js'],
+        syntax: true,
+        language: 'ts',
+      },
+      severity: 'warning',
+      message: 'Ensure all functions have comments/documentation.',
+    },
+  },
+
+  // Additional file patterns
+  {
+    name: 'Enforce LICENSE file',
+    rule: {
+      type: 'filepattern',
+      payload: { require: ['LICENSE'] },
+      severity: 'warning',
+      message: 'LICENSE file missing from project root.',
+    },
+  },
+  {
+    name: 'Enforce .editorconfig file',
+    rule: {
+      type: 'filepattern',
+      payload: { require: ['.editorconfig'] },
+      severity: 'warning',
+      message: '.editorconfig file missing, code style may be inconsistent.',
+    },
+  },
+  {
+    name: 'Enforce .prettierrc file',
+    rule: {
+      type: 'filepattern',
+      payload: { require: ['.prettierrc', '.prettierrc.json'] },
+      severity: 'warning',
+      message: 'Prettier configuration file missing.',
+    },
+  },
+];
+
+
+const getTemplateForRule = (rule: RuleInput): typeof ruleTemplates[0] => {
+  return ruleTemplates.find(t => t.rule.message === rule.message && t.rule.type === rule.type) || ruleTemplates[0];
+};
 
 export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, rule, defaultRule }) => {
   const [currentRule, setCurrentRule] = useState<RuleInput | null>(null);
@@ -21,6 +184,9 @@ export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, r
   const [requireSyntax, setRequireSyntax] = useState<boolean>(false);
   const [noEmoji, setNoEmoji] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState(ruleTemplates[0]);
+  const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const isNewRule = !rule;
 
   useEffect(() => {
@@ -35,6 +201,7 @@ export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, r
         setRequireSyntax(false);
         setNoEmoji(false);
         setErrorMessage(null);
+        setSelectedTemplate(ruleTemplates[0]);
       } else if (rule) {
         setCurrentRule({ ...rule });
         // populate helper fields from payload when editing
@@ -57,6 +224,7 @@ export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, r
           setRequireSyntax(!!p.syntax);
           setNoEmoji(!!p.noEmoji);
         }
+        setSelectedTemplate(getTemplateForRule(rule));
       }
     } else {
       setCurrentRule(null);
@@ -64,10 +232,52 @@ export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, r
     }
   }, [isOpen, rule, isNewRule, defaultRule]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsTemplateDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleChange = (field: keyof Omit<RuleInput, 'id'>, value: string) => {
     if (!currentRule) return;
     setCurrentRule({ ...currentRule, [field]: value } as RuleInput);
     setErrorMessage(null);
+    setSelectedTemplate(ruleTemplates[0]); // Mark as custom
+  };
+
+  const handleTemplateChange = (templateName: string) => {
+    const template = ruleTemplates.find(t => t.name === templateName) || ruleTemplates[0];
+    setSelectedTemplate(template);
+    setIsTemplateDropdownOpen(false);
+
+    const newRule = { ...(rule || defaultRule), ...template.rule };
+    setCurrentRule(newRule);
+
+    // Reset all derived state fields first
+    setRequiredStr('');
+    setBlockedStr('');
+    setPathsStr('');
+    setBannedStr('');
+    setRequireSyntax(false);
+    setNoEmoji(false);
+
+    // Populate derived state from the new payload
+    const p = newRule.payload;
+    if (typeof p === 'object' && p !== null) {
+      // filepattern fields
+      if ('require' in p && Array.isArray(p.require)) setRequiredStr(p.require.join(', '));
+      if ('block' in p && Array.isArray(p.block)) setBlockedStr(p.block.join(', '));
+      // content fields
+      if ('banned' in p && Array.isArray(p.banned)) setBannedStr(p.banned.join(', '));
+      if ('paths' in p && Array.isArray(p.paths)) setPathsStr(p.paths.join(', '));
+      if ('syntax' in p) setRequireSyntax(!!p.syntax);
+      if ('noEmoji' in p) setNoEmoji(!!p.noEmoji);
+    }
   };
 
   const parsePayload = (s: string): string | Record<string, any> => {
@@ -152,6 +362,47 @@ export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, r
 
             {currentRule && (
               <div className="space-y-4">
+                {isNewRule && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Rule Template</label>
+                    <div className="relative" ref={dropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
+                        className="w-full flex justify-between items-center border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:ring-2 focus:ring-blue-400 focus:outline-none text-left"
+                      >
+                        <span>{selectedTemplate.name}</span>
+                        <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isTemplateDropdownOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      <AnimatePresence>
+                        {isTemplateDropdownOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                          >
+                            {ruleTemplates.map(t => (
+                              <button
+                                key={t.name}
+                                type="button"
+                                onClick={() => handleTemplateChange(t.name)}
+                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 flex items-center justify-between"
+                              >
+                                <span>{t.name}</span>
+                                {selectedTemplate.name === t.name && (
+                                  <Check className="w-4 h-4 text-blue-600" />
+                                )}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                )}
+
+                {isNewRule && <hr className="border-gray-200" />}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Type</label>
@@ -181,22 +432,6 @@ export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, r
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Rule Kind</label>
-                  <div className="flex gap-2 mb-3">
-                    <button
-                      onClick={() => setCurrentRule({ ...(currentRule as RuleInput), type: 'filepattern' })}
-                      className={`flex-1 p-2 rounded-lg ${currentRule.type === 'filepattern' ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 hover:bg-gray-100'}`}
-                    >
-                      File pattern
-                    </button>
-                    <button
-                      onClick={() => setCurrentRule({ ...(currentRule as RuleInput), type: 'content' })}
-                      className={`flex-1 p-2 rounded-lg ${currentRule.type === 'content' ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 hover:bg-gray-100'}`}
-                    >
-                      Content
-                    </button>
-                  </div>
-
                   {currentRule.type === 'filepattern' ? (
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-1">Required file or glob</label>
@@ -264,6 +499,12 @@ export const RuleModal: React.FC<RuleModalProps> = ({ isOpen, onClose, onSave, r
                     className="w-full border border-gray-300 rounded-lg p-2 text-sm"
                   />
                 </div>
+              </div>
+            )}
+
+            {errorMessage && (
+              <div className="mt-4 text-red-600 bg-red-50 border border-red-200 rounded-lg p-3 text-sm">
+                {errorMessage}
               </div>
             )}
 
