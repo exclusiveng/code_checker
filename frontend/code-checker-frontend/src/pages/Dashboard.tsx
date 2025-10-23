@@ -154,7 +154,7 @@ export default function Dashboard() {
                 }}
               />
             )}
-            {activeTab === 'rulesets' && <RulesetManager />}
+            {activeTab === 'rulesets' && user?.role === 'super_admin' && <RulesetManager />}
             {activeTab === 'users' && user?.role === 'super_admin' && <UserManagement />}
           </motion.div>
         </div>
