@@ -1,7 +1,6 @@
 import { AppDataSource } from '../config/data-source';
 import { Submission, SubmissionStatus } from '../entities/submission.entity';
 import { RuleFinding } from './rule-engine.service';
-import { mailService } from './mail.service';
 
 export enum NotificationEvent {
   SUBMISSION_CREATED = 'submission.created',
@@ -18,36 +17,8 @@ export interface NotificationPayload {
 
 class NotificationService {
   async send(payload: NotificationPayload): Promise<void> {
-    console.log(
-      `Dispatching notification: ${payload.event} for submission ${payload.submissionId} with status ${payload.status}`,
-    );
-
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.warn('SMTP not configured. Skipping email notification.');
-      return;
-    }
-
-    const submissionRepository = AppDataSource.getRepository(Submission);
-    const submission = await submissionRepository.findOne({
-      where: { id: payload.submissionId },
-      relations: ['developer'],
-    });
-
-    if (!submission || !submission.developer) {
-      console.error(
-        `Could not send notification for submission ${payload.submissionId}: submission or developer not found.`,
-      );
-      return;
-    }
-
-    const { subject, text, html } = this.getEmailContent(submission);
-
-    await mailService.sendMail({
-      to: submission.developer.email,
-      subject,
-      text,
-      html,
-    });
+    console.log(`Notification requested: ${payload.event} for submission ${payload.submissionId} (status: ${payload.status}) — emails are disabled.`);
+    return;
   }
 
   private getEmailContent(submission: Submission): { subject: string; text: string; html: string; } {

@@ -57,6 +57,16 @@ app.use('/api/users', userRoutes);
 app.use('/api/superadmin', superadminRoutes);
 app.use('/api/projects', projectRoutes);
 
+// Internal diagnostics endpoint for worker status
+app.get('/internal/worker-status', async (req, res) => {
+  try {
+    const { workerStatus } = await import('./worker');
+    res.json(workerStatus);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to load worker status', detail: String(e) });
+  }
+});
+
 app.get('/', (req, res) => {
   res.send('Hello, World!');
 });
