@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Allow runtime override for the API base URL. This helps when the backend URL
 // is known only at runtime (e.g., different dev ports or proxied hosts).
-const envBase = import.meta.env.VITE_API_BASE;
+const envBase = import.meta.env.VITE_API_BASE_URL;
 const runtimeOverride = (window as any).__API_BASE || localStorage.getItem('API_BASE');
 const API_BASE = runtimeOverride || envBase || 'https://code-checker-b1no.onrender.com/api';
 

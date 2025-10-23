@@ -37,7 +37,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col">
       {/* Navbar */}
       <header className="flex justify-between items-center px-6 py-4 bg-blue-600 text-white shadow-md">
-        <h1 className="text-xl font-semibold tracking-wide">Code Checker Dashboard</h1>
+        <h1 className="text-xl font-semibold tracking-wide">Remote Code Tester</h1>
         <div className="flex items-center gap-4">
           <span className="hidden sm:block font-medium">{user?.name || 'Guest'}</span>
           <button
