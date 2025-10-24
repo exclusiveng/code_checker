@@ -25,14 +25,14 @@ class NotificationService {
     const { id: submissionId, status, results } = submission;
 
     if (status === SubmissionStatus.PASSED) {
-      const subject = `✅ Submission Passed: ${submissionId}`;
+      const subject = `Submission Passed: ${submissionId}`;
       const text = `Hello,\n\nGreat news! Your code submission with ID ${submissionId} has passed the automated review.\n\n- The Code Checker Team`;
       const html = `<p>Hello,</p><p>Great news! Your code submission with ID <b>${submissionId}</b> has passed the automated review.</p><p>Regards,<br/>The Code Checker Team</p>`;
       return { subject, text, html };
     }
 
     if (status === SubmissionStatus.FAILED) {
-      const subject = `❌ Submission Failed: ${submissionId}`;
+      const subject = `Submission Failed: ${submissionId}`;
       const findings: RuleFinding[] = results?.findings || [];
       const textBody = this.generateTextFindings(findings);
       const htmlBody = this.generateHtmlFindings(findings);
