@@ -27,7 +27,7 @@ export const createProject = async (req: Request, res: Response, next: NextFunct
     }
   }
 
-  // generate a slug/id from name to be used as a human-friendly identifier
+  // generate a slug/id from name to be used as an identifier
   const baseSlug = name
     .toLowerCase()
     .trim()
@@ -39,7 +39,7 @@ export const createProject = async (req: Request, res: Response, next: NextFunct
   while (await projectRepository.findOne({ where: { companyId, slug } })) {
     attempt++;
     slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
-    if (attempt > 5) break; // avoid infinite loop
+    if (attempt > 5) break;
   }
 
   const project = projectRepository.create({ name, repoUrl, companyId, rulesets, slug });

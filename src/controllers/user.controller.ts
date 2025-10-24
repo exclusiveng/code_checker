@@ -10,9 +10,7 @@ export const createUser = async (
   res: Response,
   next: NextFunction,
 ) => {
-  // Guard against undefined req.body (can happen if body-parser isn't applied
-  // or Content-Type is missing). Default to an empty object so destructuring
-  // doesn't throw.
+
   const body = (req.body || {}) as {
     name?: string;
     email?: string;
@@ -84,7 +82,7 @@ export const getUsers = async (
       .take(limit)
       .skip(skip);
 
-    // ✅ Both ADMIN and SUPER_ADMIN see only their own company's users
+    // Both ADMIN and SUPER_ADMIN see only their own company's users
     if (
       req.user.role === UserRole.ADMIN ||
       req.user.role === UserRole.SUPER_ADMIN
@@ -95,7 +93,7 @@ export const getUsers = async (
 
       qb.where('user.companyId = :companyId', { companyId: req.user.companyId });
     } else {
-      // ❌ Other roles cannot list users
+      // Other roles cannot list users
       return next(new ForbiddenError('Insufficient permissions.'));
     }
 

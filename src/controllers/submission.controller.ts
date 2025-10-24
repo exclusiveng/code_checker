@@ -59,9 +59,6 @@ export const uploadSubmission = (
       return next(new BadRequestError(`Project with id ${projectId} not found.`));
     }
 
-    // Ensure the project has at least one ruleset configured. Processing relies
-    // on project-specific rules; if none exist, reject the upload with a helpful
-    // message to encourage creating a ruleset first.
     const rulesetRepository = AppDataSource.getRepository(require('../entities/ruleset.entity').RuleSet);
     const projectRulesets = await rulesetRepository.find({ where: { projectId } });
     if (!projectRulesets || projectRulesets.length === 0) {
@@ -113,7 +110,7 @@ export const uploadSubmission = (
       status: newSubmission.status,
     });
 
-    // Use lazy queue getter so we don't attempt Redis connection at module import
+    // Use lazy queue getter so we don't try Redis connection at module import
     try {
       const submissionQueue = getSubmissionQueue();
       await submissionQueue.add('submission-analysis', {
@@ -126,7 +123,7 @@ export const uploadSubmission = (
         status: newSubmission.status,
       });
     } catch (err) {
-      // Log queue errors but allow request to succeed so dev doesn't fail when Redis is absent
+      // Log queue errors but allow request to succeed so dev doesn't fail when Redis isn't available
       console.error('Failed to enqueue submission analysis:', err);
     }
 

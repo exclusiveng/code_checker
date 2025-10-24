@@ -37,7 +37,7 @@ export const createRuleset = async (req: Request, res: Response, next: NextFunct
   const newRuleset = rulesetRepository.create({
     name,
     description,
-    rules, // TypeORM will automatically create RuleEntity instances from this raw data
+    rules,
     companyId,
     projectId: resolvedProjectId,
   });

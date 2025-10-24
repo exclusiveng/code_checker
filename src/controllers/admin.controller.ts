@@ -11,8 +11,6 @@ export const listCompanies = async (req: Request, res: Response, next: NextFunct
   if (!admin) return next(new BadRequestError('Authenticated user not found'));
 
   const companyRepository = AppDataSource.getRepository(Company);
-  // For now, SUPER_ADMIN can view only their own company. If global admins are added later,
-  // expand this to list all companies.
   const companies = await companyRepository.find({ where: { id: admin.companyId } });
   res.json(companies);
 };
@@ -84,7 +82,7 @@ export const getCompanyDetail = async (req: Request, res: Response, next: NextFu
   if (!admin) return next(new BadRequestError('Authenticated user not found'));
   const { id } = req.params; // company id
 
-  // Ensure admin only accesses their own company for now
+  // Ensure admin can only accesses their own company
   if (id !== admin.companyId) return next(new BadRequestError('Company not accessible'));
 
   const companyRepository = AppDataSource.getRepository(Company);
