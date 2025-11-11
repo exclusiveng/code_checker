@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const envBase = import.meta.env.VITE_API_BASE_URL;
 const runtimeOverride = (window as any).__API_BASE || localStorage.getItem('API_BASE');
-const API_BASE = runtimeOverride || envBase || 'http://localhost:3000/api';
+const API_BASE = runtimeOverride || envBase || 'https://code-checker-b1no.onrender.com/api';
 
 export const api = axios.create({
   baseURL: API_BASE,

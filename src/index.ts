@@ -24,7 +24,6 @@ import path from 'path';
 import { startWorker } from './worker';
 
 // --- CORS Configuration ---
-// Allow requests from your React frontend development server
 const allowedOrigins = [
   'http://localhost:5173',
   'https://dev-codetester.web.app'
