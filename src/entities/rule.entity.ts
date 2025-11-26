@@ -13,6 +13,7 @@ export enum RuleType {
 export enum RuleSeverity {
   ERROR = 'error',
   WARNING = 'warning',
+  INFO = 'info',
 }
 
 @Entity('rules')

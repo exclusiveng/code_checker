@@ -14,6 +14,7 @@ export enum RuleType {
 export enum RuleSeverity {
     ERROR = 'error',
     WARNING = 'warning',
+    INFO = 'info',
 }
 
 export interface Rule {
