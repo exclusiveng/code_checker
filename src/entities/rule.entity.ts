@@ -7,6 +7,7 @@ export enum RuleType {
   AST = 'ast',
   FILE_PATTERN = 'filepattern',
   CONTENT = 'content',
+  DEPENDENCY = 'dependency',
 }
 
 export enum RuleSeverity {
