@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const review_controller_1 = require("../controllers/review.controller");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const user_entity_1 = require("../entities/user.entity");
+const router = (0, express_1.Router)({ mergeParams: true });
+router.use(auth_middleware_1.protect);
+router.post('/', (0, auth_middleware_1.roleMiddleware)([user_entity_1.UserRole.REVIEWER, user_entity_1.UserRole.ADMIN]), review_controller_1.createReview);
+router.get('/', (0, auth_middleware_1.roleMiddleware)([user_entity_1.UserRole.REVIEWER, user_entity_1.UserRole.ADMIN, user_entity_1.UserRole.DEVELOPER]), review_controller_1.getReviews);
+exports.default = router;
