@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, AlertTriangle, Info, GitBranch, Loader2 } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, XCircle, Clock, AlertTriangle, Info, GitBranch, Loader2, Sparkles } from 'lucide-react';
 import { RuleFindingCard } from '../components/RuleFindingCard';
+import { ProjectInsights } from '../components/ProjectInsights';
 
 interface SubmissionFinding {
   ruleId?: string;
@@ -34,6 +35,7 @@ export default function SubmissionDetail() {
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'findings' | 'insights'>('findings');
 
   useEffect(() => {
     const fetchSubmission = async () => {
@@ -127,33 +129,67 @@ export default function SubmissionDetail() {
             <SummaryCard icon={CheckCircle} label="Infos" value={severityCounts.info || 0} color="text-blue-500" />
           </div>
 
-          <h3 className="font-semibold text-xl text-gray-700 flex items-center gap-2 mb-4">
-            <FileText className="w-5 h-5 text-blue-500" />
-            Detailed Findings
-          </h3>
+          {/* Tabs */}
+          <nav className="flex gap-2 p-1 bg-gray-200/50 rounded-lg mb-6">
+            <button
+              onClick={() => setActiveTab('findings')}
+              className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
+                activeTab === 'findings'
+                  ? 'bg-white text-blue-600 shadow'
+                  : 'text-gray-600 hover:bg-white/50'
+              }`}
+            >
+              <FileText className="w-4 h-4 inline mr-2" />
+              Detailed Findings
+            </button>
+            <button
+              onClick={() => setActiveTab('insights')}
+              className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
+                activeTab === 'insights'
+                  ? 'bg-white text-blue-600 shadow'
+                  : 'text-gray-600 hover:bg-white/50'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 inline mr-2" />
+              AI Insights
+            </button>
+          </nav>
 
-          {findings.length > 0 ? (
-            <div className="space-y-4">
-              <AnimatePresence>
-                {findings.map((finding, idx) => (
-                  <motion.div
-                    key={idx}
-                    initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ delay: idx * 0.05 }}
-                  >
-                    <RuleFindingCard finding={finding} />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          ) : (
-            <p className="text-gray-500 text-center py-8">
-              {submission.status === 'PENDING' || submission.status === 'ANALYZING'
-                ? 'Analysis is in progress. Findings will appear here once complete.'
-                : 'No rule findings were reported for this submission.'}
-            </p>
+          {activeTab === 'findings' && (
+            <>
+              <h3 className="font-semibold text-xl text-gray-700 flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-blue-500" />
+                Detailed Findings
+              </h3>
+
+              {findings.length > 0 ? (
+                <div className="space-y-4">
+                  <AnimatePresence>
+                    {findings.map((finding, idx) => (
+                      <motion.div
+                        key={idx}
+                        initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ delay: idx * 0.05 }}
+                      >
+                        <RuleFindingCard finding={finding} />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">
+                  {submission.status === 'PENDING' || submission.status === 'ANALYZING'
+                    ? 'Analysis is in progress. Findings will appear here once complete.'
+                    : 'No rule findings were reported for this submission.'}
+                </p>
+              )}
+            </>
+          )}
+
+          {activeTab === 'insights' && (
+            <ProjectInsights mode="submission" submissionId={id} />
           )}
         </motion.div>
       </div>

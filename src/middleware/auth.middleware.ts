@@ -68,3 +68,6 @@ export const roleMiddleware = (roles: UserRole[]) => {
     next();
   };
 };
+
+// Alias for better naming consistency
+export const authenticate = protect;

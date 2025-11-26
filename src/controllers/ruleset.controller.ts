@@ -129,6 +129,12 @@ export const deleteRuleset = async (req: Request, res: Response, next: NextFunct
     return next(new BadRequestError('Ruleset not found'));
   }
 
+  // Manually delete associated rules first to avoid foreign key constraint errors
+  if (ruleset.rules && ruleset.rules.length > 0) {
+    const ruleRepository = AppDataSource.getRepository(Rule);
+    await ruleRepository.remove(ruleset.rules);
+  }
+
   await rulesetRepository.remove(ruleset);
 
   res.status(204).json('Deleted Successfully');

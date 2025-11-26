@@ -35,9 +35,21 @@ function getTextFilesFromZip(zip: any): { path: string; content: string }[] {
 function evaluateFilepatternRule(rule: Rule, fileList: string[]): RuleFinding[] {
   const findings: RuleFinding[] = [];
   const payload = rule.payload || {};
+  
+  // Normalize payload to handle both legacy and AI formats
   const requireList: string[] = payload.require || [];
+  const blockList: string[] = payload.block || [];
+  
+  // Handle AI format: { pattern: string, exists: boolean }
+  if (payload.pattern) {
+    if (payload.exists === true) {
+      requireList.push(payload.pattern);
+    } else if (payload.exists === false) {
+      blockList.push(payload.pattern);
+    }
+  }
+
   const allow: string[] | undefined = payload.allow;
-  const block: string[] | undefined = payload.block;
 
   // required files must exist
   for (const required of requireList) {
@@ -53,9 +65,9 @@ function evaluateFilepatternRule(rule: Rule, fileList: string[]): RuleFinding[] 
   }
 
   // block patterns not allowed
-  if (block && block.length > 0) {
+  if (blockList.length > 0) {
     for (const file of fileList) {
-      if (block.some((b) => new Minimatch(b, { matchBase: true, dot: true }).match(file))) {
+      if (blockList.some((b) => new Minimatch(b, { matchBase: true, dot: true }).match(file))) {
         findings.push({
           ruleId: rule.id,
           severity: rule.severity,
@@ -87,7 +99,15 @@ function evaluateFilepatternRule(rule: Rule, fileList: string[]): RuleFinding[] 
 function evaluateContentRule(rule: Rule, files: { path: string; content: string }[]): RuleFinding[] {
   const findings: RuleFinding[] = [];
   const payload = rule.payload || {};
-  const tokens: string[] = payload.banned || payload.patterns || [];
+  
+  // Legacy support
+  const bannedTokens: string[] = payload.banned || payload.patterns || [];
+  
+  // AI format support
+  const pattern = payload.pattern;
+  const flags = payload.flags || 'u';
+  const shouldMatch = payload.shouldMatch !== undefined ? payload.shouldMatch : false; // default to false (banned) if not specified
+
   const paths: string[] | undefined = payload.paths;
 
   // options in payload
@@ -95,20 +115,32 @@ function evaluateContentRule(rule: Rule, files: { path: string; content: string 
   const requireNoEmoji: boolean = !!payload.noEmoji;
   const requireSyntaxValid: boolean = !!payload.syntax;
 
-  const regexes = tokens.map((t) => {
+  // Prepare regexes
+  const regexes: { regex: RegExp; shouldMatch: boolean }[] = [];
+
+  // Add legacy banned tokens
+  for (const token of bannedTokens) {
     try {
-      return new RegExp(t, 'u');
-    } catch {
-      return null;
+      regexes.push({ regex: new RegExp(token, 'u'), shouldMatch: false });
+    } catch (e) {
+      console.error(`Invalid regex in rule ${rule.id}: ${token}`, e);
     }
-  }).filter((r): r is RegExp => !!r);
+  }
+
+  // Add AI pattern
+  if (pattern) {
+    try {
+      regexes.push({ regex: new RegExp(pattern, flags), shouldMatch: shouldMatch });
+    } catch (e) {
+      console.error(`Invalid regex in rule ${rule.id}: ${pattern}`, e);
+    }
+  }
 
   for (const file of files) {
     if (!matchPaths(paths, file.path)) continue;
     
     const ext = (file.path.split('.').pop() || 'unknown').toLowerCase();
-    console.log(`Evaluating file: ${file.path} (detected language/extension: ${ext})`);
-
+    
     // language enforcement by file extension
     if (enforceLanguage) {
       const langMap: Record<string, string[]> = {
@@ -126,7 +158,6 @@ function evaluateContentRule(rule: Rule, files: { path: string; content: string 
           message: rule.message || `File ${file.path} does not match required language ${enforceLanguage}`,
           locations: [{ file: file.path }],
         });
-
       }
     }
 
@@ -184,19 +215,35 @@ function evaluateContentRule(rule: Rule, files: { path: string; content: string 
       }
     }
 
-    // line-by-line banned patterns
+    // Regex checks (both banned and required)
     const lines = file.content.split(/\r?\n/);
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      for (const re of regexes) {
-        if (re.test(line)) {
+    
+    for (const { regex, shouldMatch } of regexes) {
+      if (shouldMatch) {
+        // Required content: must exist somewhere in the file
+        if (!regex.test(file.content)) {
           findings.push({
             ruleId: rule.id,
             severity: rule.severity,
-            message: rule.message || `Banned content matched`,
-            locations: [{ file: file.path, line: i + 1, excerpt: line.slice(0, 200) }],
+            message: rule.message || `Required pattern not found: ${regex.source}`,
+            locations: [{ file: file.path }],
           });
-          break;
+        }
+      } else {
+        // Banned content: must NOT exist
+        // Check line by line for better reporting
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (regex.test(line)) {
+            findings.push({
+              ruleId: rule.id,
+              severity: rule.severity,
+              message: rule.message || `Banned content matched: ${regex.source}`,
+              locations: [{ file: file.path, line: i + 1, excerpt: line.slice(0, 200) }],
+            });
+            // Break after first match in file to avoid spamming findings for the same rule
+            break;
+          }
         }
       }
     }

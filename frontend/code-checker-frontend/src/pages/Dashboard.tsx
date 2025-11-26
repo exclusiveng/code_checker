@@ -3,15 +3,23 @@ import {UploadForm} from '../components/UploadForm';
 import { SubmissionList } from '../components/SubmissionList';
 import { ProjectList } from '../components/ProjectList'; 
 import { useAuth } from '../hooks/useAuth';
-import { LogOut, User, Calendar, Shield } from 'lucide-react';
+import { LogOut, User, Calendar, Shield, Sparkles, Search as SearchIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { RulesetManager } from '../components/RulesetManager';
 import { UserManagement } from '../components/UserManagement';
+import { ProjectInsights } from '../components/ProjectInsights';
+import { AICodeSearch } from '../components/AICodeSearch';
+import { SubmissionCompare } from '../components/SubmissionCompare';
+import { ProjectSelector } from '../components/ProjectSelector';
+import api from '../api/api';
 
 export default function Dashboard() {
   const { user, logout, isAuthenticated, isVerifying, isLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'projects' | 'submissions' | 'upload' | 'rulesets' | 'users'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'submissions' | 'upload' | 'rulesets' | 'users' | 'insights' | 'search'>('projects');
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [searchSubTab, setSearchSubTab] = useState<'query' | 'compare'>('query');
+  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -20,6 +28,22 @@ export default function Dashboard() {
       navigate('/login', { replace: true });
     }
   }, [isAuthenticated, isVerifying, isLoading, navigate]);
+
+  // Fetch projects for Insights tab
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const response = await api.get('/projects');
+        setProjects(response.data.data || []);
+      } catch (error) {
+        console.error('Failed to fetch projects:', error);
+      }
+    };
+
+    if (isAuthenticated) {
+      fetchProjects();
+    }
+  }, [isAuthenticated]);
 
   if (isLoading || isVerifying) {
     return (
@@ -116,15 +140,39 @@ export default function Dashboard() {
             >
               Upload
             </button>
+            {(user?.role === 'super_admin' || user?.role === 'admin') && (
+              <button
+                onClick={() => setActiveTab('rulesets')}
+                className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
+                  activeTab === 'rulesets'
+                    ? 'bg-white text-blue-600 shadow'
+                    : 'text-gray-600 hover:bg-white/50'
+                }`}
+              >
+                Rule Sets
+              </button>
+            )}
             <button
-              onClick={() => setActiveTab('rulesets')}
+              onClick={() => setActiveTab('insights')}
               className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
-                activeTab === 'rulesets'
+                activeTab === 'insights'
                   ? 'bg-white text-blue-600 shadow'
                   : 'text-gray-600 hover:bg-white/50'
               }`}
             >
-              Rule Sets
+              <Sparkles className="w-4 h-4 inline mr-1" />
+              Insights
+            </button>
+            <button
+              onClick={() => setActiveTab('search')}
+              className={`flex-1 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
+                activeTab === 'search'
+                  ? 'bg-white text-blue-600 shadow'
+                  : 'text-gray-600 hover:bg-white/50'
+              }`}
+            >
+              <SearchIcon className="w-4 h-4 inline mr-1" />
+              Search
             </button>
             {user?.role === 'super_admin' && (
               <button
@@ -154,8 +202,78 @@ export default function Dashboard() {
                 }}
               />
             )}
-            {activeTab === 'rulesets' && user?.role === 'super_admin' && <RulesetManager />}
+            {activeTab === 'rulesets' && (user?.role === 'super_admin' || user?.role === 'admin') && <RulesetManager />}
             {activeTab === 'users' && user?.role === 'super_admin' && <UserManagement />}
+            {activeTab === 'insights' && (
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">Project Insights</h2>
+                <p className="text-gray-600 mb-4 text-sm">
+                  Select a project to view AI-generated insights and trends.
+                </p>
+                <div className="mb-6">
+                  <ProjectSelector
+                    projects={projects}
+                    selectedProjectId={selectedProjectId}
+                    onSelect={(id) => setSelectedProjectId(id)}
+                  />
+                </div>
+                {selectedProjectId ? (
+                  <ProjectInsights mode="project" projectId={selectedProjectId} />
+                ) : (
+                  <div className="text-center p-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                    <Sparkles className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-500">Select a project above to view AI insights</p>
+                  </div>
+                )}
+              </div>
+            )}
+            {activeTab === 'search' && (
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">AI-Powered Search</h2>
+                
+                {/* Sub-tabs */}
+                <div className="flex gap-2 mb-6">
+                  <button
+                    onClick={() => setSearchSubTab('query')}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                      searchSubTab === 'query'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Code Query
+                  </button>
+                  <button
+                    onClick={() => setSearchSubTab('compare')}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                      searchSubTab === 'compare'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Compare Submissions
+                  </button>
+                </div>
+
+                {/* Sub-tab content */}
+                {searchSubTab === 'query' && selectedProjectId ? (
+                  <AICodeSearch projectId={selectedProjectId} />
+                ) : searchSubTab === 'query' ? (
+                  <div className="text-center p-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                    <SearchIcon className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-500 mb-4">Select a project from the Insights tab first</p>
+                    <button
+                      onClick={() => setActiveTab('insights')}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Go to Insights
+                    </button>
+                  </div>
+                ) : (
+                  <SubmissionCompare />
+                )}
+              </div>
+            )}
           </motion.div>
         </div>
       </main>

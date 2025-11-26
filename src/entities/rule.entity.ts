@@ -20,7 +20,7 @@ export class Rule {
   id: string;
 
   // Relation to RuleSet - match property name defined on RuleSet (rules)
-  @ManyToOne(() => RuleSet, ruleSet => ruleSet.rules)
+  @ManyToOne(() => RuleSet, ruleSet => ruleSet.rules, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'rule_set_id' })
   ruleSet: RuleSet;
 

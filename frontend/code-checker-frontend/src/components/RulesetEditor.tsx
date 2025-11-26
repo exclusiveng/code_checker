@@ -18,6 +18,7 @@ export type RuleInput = {
 interface RulesetEditorProps {
   rulesetId: string;
   rulesetName: string;
+  initialRules?: RuleInput[];
   onSaveSuccess: () => void;
   onCancel: () => void;
 }
@@ -29,7 +30,13 @@ const defaultRule: RuleInput = {
   message: '',
 };
 
-export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, rulesetName, onSaveSuccess, onCancel }) => {
+export const RulesetEditor: React.FC<RulesetEditorProps> = ({ 
+  rulesetId, 
+  rulesetName, 
+  initialRules = [], 
+  onSaveSuccess, 
+  onCancel 
+}) => {
   const { user } = useAuth();
   const [rules, setRules] = useState<RuleInput[]>([]);
   const [name, setName] = useState(rulesetName);
@@ -47,9 +54,10 @@ export const RulesetEditor: React.FC<RulesetEditorProps> = ({ rulesetId, ruleset
       setLoading(true);
       setError(null);
       try {
-        // If creating a new ruleset, don't attempt to fetch from backend
+        // If creating a new ruleset, use initialRules if provided
         if (rulesetId === 'new') {
-          setRules([]);
+          setRules(initialRules);
+          setLoading(false);
           return;
         }
 
